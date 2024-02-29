@@ -1,0 +1,280 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#define global_variable static
+#define local_persist   static
+#define internal        static
+
+typedef int8_t  i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
+
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef u32 b32;
+
+typedef float  f32;
+typedef double f64;
+
+#include "aberration.cpp"
+
+#include <windows.h>
+
+struct win32_offscreen_buffer{ 
+    BITMAPINFO Info;
+    void *Memory;
+    int Width;
+    int Height;
+    int Pitch;
+    int BytesPerPixel = 4;
+    
+};
+
+global_variable bool GlobalRunning;
+global_variable win32_offscreen_buffer GlobalBackBuffer;
+
+Input input;
+
+struct win32_window_dimension{
+    int Width;
+    int Height;
+};
+
+win32_window_dimension 
+Win32GetWindowDimension(HWND Window){
+    win32_window_dimension Result;
+
+    RECT ClientRect;
+    GetClientRect(Window, &ClientRect);
+    Result.Width = ClientRect.right - ClientRect.left;
+    Result.Height = ClientRect.bottom - ClientRect.top;
+    return Result;  
+}
+
+internal void
+Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height){
+    if (Buffer->Memory){
+        VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
+    }
+    
+    Buffer->Width  = Width;
+    Buffer->Height = Height;
+    
+    Buffer->Info.bmiHeader.biSize        = sizeof(Buffer->Info.bmiHeader);
+    Buffer->Info.bmiHeader.biWidth       = Buffer->Width;
+    Buffer->Info.bmiHeader.biHeight      = -Buffer->Height;
+    Buffer->Info.bmiHeader.biPlanes      = 1;
+    Buffer->Info.bmiHeader.biBitCount    = 32;
+    Buffer->Info.bmiHeader.biCompression = BI_RGB;
+    
+    int BitmapMemorySize = Buffer->BytesPerPixel * Buffer->Width * Buffer->Height;
+    Buffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    
+    Buffer->Pitch = Buffer->Width * Buffer->BytesPerPixel;
+} 
+
+internal void
+Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int WindowHeight,
+                           win32_offscreen_buffer *Buffer,
+                           int X, int Y, int Width, int Height) // Guys on this line don't used
+{
+    StretchDIBits(DeviceContext,
+                  /*
+                  X, Y, Width, Height,
+                  X, Y, Width, Height,
+                  */
+                  0, 0, WindowWidth, WindowHeight,
+                  0, 0, Buffer->Width, Buffer->Height,
+                  Buffer->Memory,
+                  &Buffer->Info,
+                  DIB_RGB_COLORS, SRCCOPY);
+}
+
+LRESULT CALLBACK
+Win32MainWindowCallback(HWND Window,
+                        UINT Message,
+                        WPARAM WParam,
+                        LPARAM LParam)
+{
+    LRESULT Result = 0;
+    
+    switch (Message){
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        {
+            u32 VKCode = WParam;
+            bool WasDown = (LParam & (1 << 30)) != 0;
+            bool IsDown  = ((LParam & (1 << 31)) == 0);
+            if (WasDown && IsDown) break;
+            
+            switch (VKCode){
+                case 'w':
+                case VK_UP:{
+                    input.up_key = IsDown;
+                } break;
+                case 's':
+                case VK_DOWN:{
+                    input.down_key = IsDown;
+                } break;
+            }
+            
+            if (VKCode == 'W'){
+                if (!WasDown && IsDown){
+                    printf("WPRESSED");
+                } else if (WasDown && IsDown){
+                    printf(" WDOWN");
+                } else if (WasDown && !IsDown){
+                    printf("WUP");
+                }
+                printf("\n");
+            }
+            
+            bool AltKeyWasDown = (LParam & (1 << 29)) != 0;
+            if (VKCode == VK_F4 && AltKeyWasDown){
+                GlobalRunning = false;
+            }
+        } break;
+    
+        case WM_SIZE:{
+        } break;
+        
+        case WM_CLOSE:{
+            GlobalRunning = false;
+        } break;
+        
+        case WM_DESTROY:{
+            GlobalRunning = false;
+        } break;
+        
+        case WM_PAINT:{
+            PAINTSTRUCT Paint;
+            HDC DeviceContext = BeginPaint(Window, &Paint);
+            
+            int X = Paint.rcPaint.left;
+            int Y = Paint.rcPaint.top;
+            int Width = Paint.rcPaint.right - Paint.rcPaint.left;
+            int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
+            
+            win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+            
+            Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, X, Y, Width, Height);
+            
+            //PatBlt(DeviceContext, X, Y, Width, Height, WHITENESS);
+  
+            EndPaint(Window, &Paint);
+
+        } break;
+        
+        default:{
+            Result = DefWindowProc(Window, Message, WParam, LParam);
+        } break;
+    }
+
+    return (Result);
+}
+
+int CALLBACK WinMain(HINSTANCE Instance,
+                     HINSTANCE PrevInstance,
+                     LPSTR CommandLine,
+                     int ShowCode)
+{
+    LARGE_INTEGER PerfCountFrequencyResult;
+    QueryPerformanceFrequency(&PerfCountFrequencyResult);
+    i64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
+
+    WNDCLASS WindowClass = {0};    
+    
+    Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
+    
+    WindowClass.style       = CS_HREDRAW | CS_VREDRAW;
+    WindowClass.lpfnWndProc = Win32MainWindowCallback;
+    WindowClass.hInstance   = Instance;
+    
+    WindowClass.lpszClassName = "ClassTrulyAberration";
+    
+    AttachConsole(ATTACH_PARENT_PROCESS);
+    //for printf to work
+    freopen("CONOUT$", "w", stdout);
+    
+    if (!RegisterClass(&WindowClass)){
+        printf("oshiblis");
+    }
+    HWND Window = CreateWindowExA(
+                             0,
+                             WindowClass.lpszClassName,
+                             "Truly Aberration",
+                             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                             CW_USEDEFAULT,
+                             CW_USEDEFAULT,
+                             CW_USEDEFAULT,
+                             CW_USEDEFAULT,
+                             0,
+                             0,
+                             Instance,
+                             0);
+    if (!Window){
+        printf("oshibkaa");
+    }
+    
+    LARGE_INTEGER LastCounter;
+    QueryPerformanceCounter(&LastCounter);
+
+    i64 LastCycleCount = __rdtsc();
+    
+    f32 delta = 0;
+    
+    InitGame();
+    
+    GlobalRunning = true;
+    while(GlobalRunning){
+        MSG Message;
+        while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE)){
+            if (Message.message == WM_QUIT){
+                GlobalRunning = false;
+            }
+        
+            TranslateMessage(&Message);
+            DispatchMessage(&Message);
+        }
+        
+        screen_buffer GameBuffer = {};
+        GameBuffer.Memory = GlobalBackBuffer.Memory;
+        GameBuffer.Width = GlobalBackBuffer.Width;
+        GameBuffer.Height = GlobalBackBuffer.Height;
+        GameBuffer.Pitch = GlobalBackBuffer.Pitch;
+                
+        GameUpdateAndRender(delta, input, &GameBuffer);
+        
+        HDC DeviceContext = GetDC(Window);
+        win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+        
+        Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, 0, 0, Dimension.Width, Dimension.Height);
+        ReleaseDC(Window, DeviceContext);
+        
+        i64 EndCycleCount = __rdtsc();
+
+        LARGE_INTEGER EndCounter;
+        QueryPerformanceCounter(&EndCounter);
+
+        i64 CyclesElapsed = EndCycleCount - LastCycleCount;
+        i64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
+        f32 MSPerFrame = (f32)(1000.0f * CounterElapsed) / (f32)PerfCountFrequency;
+        delta = (f32)(1.0f * CounterElapsed) / (f32)PerfCountFrequency;
+        f32 FPS = (f32)PerfCountFrequency / (f32)CounterElapsed;
+        //Mega-cycles per frame
+        f32 MCPF = (f32)CyclesElapsed / 1000.0f / 1000.0f;
+        //printf("MS: %f, Fps: %f, MCpf: %f\n", MSPerFrame, FPS, MCPF);
+        
+        LastCycleCount = EndCycleCount;
+        LastCounter = EndCounter;
+    }                                 
+    return (0);
+}
+
