@@ -23,6 +23,7 @@ struct Input{
     b32 down_key;
     b32 right_key;
     b32 left_key;
+    b32 jump_key;
 };
 
 struct screen_buffer{
@@ -39,13 +40,14 @@ struct Player{
     f32 base_speed = 20;
     f32 acceleration = 80;
     f32 friction = 30;
+    f32 jump_force = 30;
     Vector2 velocity;
 };
 
 struct Game{
     Input input;
     f32 delta;
-    f32 gravity = -9.81f;
+    f32 gravity = -30.0f;
     Array entities;
     Array walls;
     Player player;

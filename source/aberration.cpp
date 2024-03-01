@@ -73,6 +73,11 @@ void InitGame(){
     floor.position = {60, 10};
     floor.scale = {100, 10};
     array_add(&global_game.walls, &floor);
+    
+    Entity right_wall = {};
+    right_wall.position = {100, 30};
+    right_wall.scale = {5, 50};
+    array_add(&global_game.walls, &right_wall);
 }
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
@@ -93,6 +98,10 @@ void update(Game *game){
 }
 
 void update_player(Game *game){
+    if (game->input.jump_key && game->player.grounded){
+        game->player.velocity.y += game->player.jump_force;
+    }
+
     f32 vertical = 0;
     if (game->input.up_key) vertical = 1;
     if (game->input.down_key) vertical = -1;
@@ -147,6 +156,10 @@ void check_player_collisions(Game *game){
         }
         game->player.velocity.y -= game->player.velocity.y;
     }
+    
+    if (check_entity_collisions(game, &game->player.entity, horizontal_wish_position)){
+        game->player.velocity.x -= game->player.velocity.x;
+    }
 }
 
 
@@ -177,11 +190,18 @@ b32 check_box_collision(Entity *rect1, Entity *rect2){
     f32 rect2W = rect2->scale.x;
     f32 rect2H = rect2->scale.y;
     
+    b32 solution = rect1X + rect1W * 0.5f > rect2X - rect2W * 0.5f &&
+                   rect1X - rect1W * 0.5f < rect2X + rect2W * 0.5f &&
+                   rect1Y + rect1H * 0.5f > rect2Y - rect2H * 0.5f &&
+                   rect1Y - rect1H * 0.5f < rect2Y + rect2H * 0.5f;
+    /*
     if (rect1X < rect2X + rect2W &&
         rect2X < rect1X + rect1W &&
         rect1Y < rect2Y + rect2H &&
         rect2Y < rect1Y + rect1H)
     {
+    */
+    if (solution){
         return 1;
     }
     
@@ -201,6 +221,7 @@ void render(Game *game, screen_buffer *Buffer){
 
 void draw_entities(Game *game, screen_buffer *Buffer){
     for (int i = 0; i < game->walls.count; i++){
+        printf("%d\n",  (int)((Entity *)array_get(&game->walls, 1))->position.y);
         draw_rect(Buffer, ((Entity *)array_get(&game->walls, i))->position, ((Entity *)array_get(&game->walls, i))->scale, 0x44aaaa);
     }
 }
