@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #define global_variable static
 #define local_persist   static
@@ -67,7 +68,7 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height){
     
     Buffer->Info.bmiHeader.biSize        = sizeof(Buffer->Info.bmiHeader);
     Buffer->Info.bmiHeader.biWidth       = Buffer->Width;
-    Buffer->Info.bmiHeader.biHeight      = -Buffer->Height;
+    Buffer->Info.bmiHeader.biHeight      = Buffer->Height;
     Buffer->Info.bmiHeader.biPlanes      = 1;
     Buffer->Info.bmiHeader.biBitCount    = 32;
     Buffer->Info.bmiHeader.biCompression = BI_RGB;
@@ -115,16 +116,28 @@ Win32MainWindowCallback(HWND Window,
             if (WasDown && IsDown) break;
             
             switch (VKCode){
-                case 'w':
+                case 'W':
                 case VK_UP:{
                     input.up_key = IsDown;
                 } break;
-                case 's':
+                
+                case 'S':
                 case VK_DOWN:{
                     input.down_key = IsDown;
                 } break;
+                
+                case 'D':
+                case VK_RIGHT:{
+                    input.right_key = IsDown;
+                } break;
+                
+                case 'A':
+                case VK_LEFT:{
+                    input.left_key = IsDown;
+                } break;
             }
             
+            /*
             if (VKCode == 'W'){
                 if (!WasDown && IsDown){
                     printf("WPRESSED");
@@ -135,6 +148,7 @@ Win32MainWindowCallback(HWND Window,
                 }
                 printf("\n");
             }
+            */
             
             bool AltKeyWasDown = (LParam & (1 << 29)) != 0;
             if (VKCode == VK_F4 && AltKeyWasDown){

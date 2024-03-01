@@ -1,3 +1,5 @@
+#include "my_math.cpp"
+#include "utils.cpp"
 #include "aberration.h"
 
 internal void
@@ -17,6 +19,8 @@ RenderFunnyGradient(screen_buffer *Buffer, int XOffset, int YOffset){
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color){
     width  *= UNIT_SIZE;
     height *= UNIT_SIZE;
+    xPosition *= UNIT_SIZE;
+    yPosition *= UNIT_SIZE;
     u8 *row = (u8 *) Buffer->Memory;
     
     u32 upPosition     = (u32)yPosition - (u32)height * 0.5f;
@@ -41,46 +45,162 @@ void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color)
     draw_rect(Buffer, position.x, position.y, size.x, size.y, color);
 }
 
-Entity *entities;
-Entity player;
+void fill_background(screen_buffer *Buffer, u32 color){
+    u8 *ROW = (u8 *) Buffer->Memory;
+    for (int y = 0; y < Buffer->Height; y++){
+        u32 *Pixel = (u32 *) ROW;
+        for (int x = 0; x < Buffer->Width; x++){
+            *Pixel++ = color;                  
+        }
+        ROW += Buffer->Pitch;
+    }
+}
+
+Game global_game;
 
 void InitGame(){
-    entities = (Entity *)malloc(3 * sizeof(Entity));
+    global_game = {};
+    global_game.entities = array_init(sizeof(Entity));
     
-    player = entities[0];
-    player.position = {100, 100};
-    player.scale = {2, 2};
+    global_game.player = {};
+    global_game.player.entity = {};
+    global_game.player.entity.position = {30, 50};
+    global_game.player.entity.scale = {3, 3};
+    
+    global_game.walls = array_init(sizeof(Entity));
+    
+    Entity floor = {};
+    floor.position = {60, 10};
+    floor.scale = {100, 10};
+    array_add(&global_game.walls, &floor);
 }
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
-    local_persist int aboba = 100;
-    
-    RenderFunnyGradient(Buffer, aboba, aboba);
-    
-    update(delta, input);
-    render(Buffer);
-    //draw_rect(Buffer, Buffer->Width * 0.5f, Buffer->Height * 0.5f, 100, 100, 0x44332255);
+    global_game.input = input;
+    global_game.delta = delta;
 
-    aboba++;
+    update(&global_game);
+    render(&global_game, Buffer);
 }
 
-void update(f32 delta, Input input){
-    f32 move_speed = 100;
+void update(Game *game){
+    update_player(game);
+
+    game->player.entity.position.x += game->player.velocity.x * game->delta;
+    game->player.entity.position.y += game->player.velocity.y * game->delta;
+    //game->player.entity.position.y += vertical * move_speed * delta;   
+    //game->player.entity.position.x += horizontal * move_speed * delta;   
+}
+
+void update_player(Game *game){
+    f32 vertical = 0;
+    if (game->input.up_key) vertical = 1;
+    if (game->input.down_key) vertical = -1;
     
-    if (input.up_key){
-        player.position.y -= move_speed * delta;   
+    f32 horizontal = 0;
+    if (game->input.right_key) horizontal = 1;
+    if (game->input.left_key)  horizontal = -1;
+    
+    f32 wish_speed = horizontal * game->player.base_speed;
+    
+    accelerate(&(game->player.velocity), game->delta, game->player.base_speed, wish_speed, horizontal, game->player.acceleration);
+    
+    apply_friction(&(game->player.velocity), game->delta, game->player.friction);
+    
+    if (!game->player.grounded){
+        game->player.velocity.y += game->gravity * game->delta;
     }
     
-    if (input.down_key){
-        player.position.y += move_speed * delta;   
+    check_player_collisions(game);
+    //printf("%d\n", (int)game->player.velocity.x);
+}
+
+void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration){
+    if (direction == 0) return;
+
+    f32 new_speed = velocity->x + acceleration * direction * delta;
+    
+    if (abs(new_speed) > base_speed){
+        new_speed = base_speed * direction;
+    }
+    
+    velocity->x = new_speed;
+}
+void apply_friction(Vector2 *velocity, f32 delta, f32 friction){
+    f32 friction_force = friction * -normalize(velocity->x) * delta;
+    velocity->x += friction_force;
+}
+
+void check_player_collisions(Game *game){
+    game->player.grounded = 0;
+
+    Vector2 vertical_wish_position = 
+           {game->player.entity.position.x,
+            game->player.entity.position.y + game->player.velocity.y * game->delta};
+    Vector2 horizontal_wish_position = 
+           {game->player.entity.position.x + game->player.velocity.x * game->delta,
+            game->player.entity.position.y};
+            
+    if (check_entity_collisions(game, &game->player.entity, vertical_wish_position)){
+        if (game->player.velocity.y < 0){
+            game->player.grounded = 1;
+        }
+        game->player.velocity.y -= game->player.velocity.y;
     }
 }
 
-Vector2 vec2_multiply(Vector2 vector, float value){
-    return {vector.x * value, vector.y * value};
+
+b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position){
+    Entity future_entity = *entity;
+    future_entity.position = wish_position;
+    for (int i = 0; i < game->walls.count; i++){
+        //printf("truly wall we check %d\n", (int)((Entity *)array_get(&game->walls, 0))->position.y);
+        //printf("truly player we check %d\n", (int)game->player.entity.position.y);
+        
+        if (check_box_collision(&future_entity, (Entity *)array_get(&game->walls, i))){
+            return 1;
+        }
+    }
+    
+    return 0;
 }
 
-void render(screen_buffer *Buffer){
-    draw_rect(Buffer, player.position, player.scale, 0xff3423);
-    //draw_rect(Buffer, player.position.x, player.position.y, player.scale.x * UNIT_SIZE, player.scale.y * UNIT_SIZE, 0xff5533);
+
+b32 check_box_collision(Entity *rect1, Entity *rect2){
+    f32 rect1X = rect1->position.x;
+    f32 rect1Y = rect1->position.y;
+    f32 rect2X = rect2->position.x;
+    f32 rect2Y = rect2->position.y;
+    
+    f32 rect1W = rect1->scale.x;
+    f32 rect1H = rect1->scale.y;
+    f32 rect2W = rect2->scale.x;
+    f32 rect2H = rect2->scale.y;
+    
+    if (rect1X < rect2X + rect2W &&
+        rect2X < rect1X + rect1W &&
+        rect1Y < rect2Y + rect2H &&
+        rect2Y < rect1Y + rect1H)
+    {
+        return 1;
+    }
+    
+    return 0;
+}
+
+
+
+void render(Game *game, screen_buffer *Buffer){
+    fill_background(Buffer, 0xffffff);
+    
+    draw_entities(game, Buffer);
+
+    draw_rect(Buffer, game->player.entity.position, game->player.entity.scale, 0xff3423);
+    //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * UNIT_SIZE, player.scale.y * UNIT_SIZE, 0xff5533);
+}
+
+void draw_entities(Game *game, screen_buffer *Buffer){
+    for (int i = 0; i < game->walls.count; i++){
+        draw_rect(Buffer, ((Entity *)array_get(&game->walls, i))->position, ((Entity *)array_get(&game->walls, i))->scale, 0x44aaaa);
+    }
 }
