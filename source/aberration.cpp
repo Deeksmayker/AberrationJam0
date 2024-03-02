@@ -17,24 +17,32 @@ RenderFunnyGradient(screen_buffer *Buffer, int XOffset, int YOffset){
 }
 
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color){
+    xPosition -= camera_position.x;
+    yPosition -= camera_position.y;
+
     width  *= UNIT_SIZE;
     height *= UNIT_SIZE;
     xPosition *= UNIT_SIZE;
     yPosition *= UNIT_SIZE;
     u8 *row = (u8 *) Buffer->Memory;
     
-    u32 upPosition     = (u32)yPosition - (u32)height * 0.5f;
-    u32 bottomPosition = (u32)yPosition + (u32)height * 0.5f;
-    u32 leftPosition   = (u32)xPosition - (u32)width * 0.5f;
-    u32 rightPosition  = (u32)xPosition + (u32)width * 0.5f;
+    i32 upPosition     = clamp((i32)yPosition + (i32)(height * 0.5f), 0, Buffer->Height - 1);
+    i32 bottomPosition = clamp((i32)yPosition - (i32)(height * 0.5f), 0, Buffer->Height - 1);
+    i32 leftPosition   = clamp((i32)xPosition - (i32)(width * 0.5f), 0, Buffer->Width - 1);
+    i32 rightPosition  = clamp((i32)xPosition + (i32)(width * 0.5f), 0, Buffer->Width - 1);
     
-    row += Buffer->Pitch * upPosition;
+    row += Buffer->Pitch * bottomPosition;
     
-    for (u32 y = upPosition; y <= bottomPosition && y < Buffer->Height && y >= 0; y++){
+    for (int y = bottomPosition; y <= upPosition; y++){
+        if (y >= Buffer->Height || y < 0){
+            continue;
+        }
         u32 *pixel = (u32 *)row;
         pixel += leftPosition;
-        for (int x = leftPosition; x <= rightPosition && x < Buffer->Width && x >= 0; x++){
-            
+        for (int x = leftPosition; x <= rightPosition; x++){
+            if (x >= Buffer->Width && x < 0){
+                continue;
+            }
             *pixel++ = color;
         }
         row += Buffer->Pitch;
@@ -58,13 +66,26 @@ void fill_background(screen_buffer *Buffer, u32 color){
 
 Game global_game;
 
+int level1[10][10] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+};
+
 void InitGame(){
     global_game = {};
     global_game.entities = array_init(sizeof(Entity));
     
     global_game.player = {};
     global_game.player.entity = {};
-    global_game.player.entity.position = {30, 50};
+    global_game.player.entity.position = {30, 30};
     global_game.player.entity.scale = {3, 3};
     
     global_game.walls = array_init(sizeof(Entity));
@@ -76,8 +97,10 @@ void InitGame(){
     
     Entity right_wall = {};
     right_wall.position = {100, 30};
-    right_wall.scale = {5, 50};
+    right_wall.scale = {5, 150};
     array_add(&global_game.walls, &right_wall);
+    
+    global_game.tilemap = {};
 }
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
@@ -93,8 +116,8 @@ void update(Game *game){
 
     game->player.entity.position.x += game->player.velocity.x * game->delta;
     game->player.entity.position.y += game->player.velocity.y * game->delta;
-    //game->player.entity.position.y += vertical * move_speed * delta;   
-    //game->player.entity.position.x += horizontal * move_speed * delta;   
+    
+    //camera_position = game->player.entity.position;
 }
 
 void update_player(Game *game){
@@ -221,7 +244,13 @@ void render(Game *game, screen_buffer *Buffer){
 
 void draw_entities(Game *game, screen_buffer *Buffer){
     for (int i = 0; i < game->walls.count; i++){
-        printf("%d\n",  (int)((Entity *)array_get(&game->walls, 1))->position.y);
+        //printf("%d\n",  (int)((Entity *)array_get(&game->walls, 1))->position.y);
         draw_rect(Buffer, ((Entity *)array_get(&game->walls, i))->position, ((Entity *)array_get(&game->walls, i))->scale, 0x44aaaa);
     }
 }
+/*
+int **level1_tilemap(){
+    int tilemap[10][10];
+    return tilemap;
+}
+*/

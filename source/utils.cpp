@@ -5,11 +5,11 @@ struct Array{
     int max_count;
 };
 
-Array array_init(size_t size){
+Array array_init(size_t size, int count = 10){
     Array array = {};
     array.size = size;
     array.data = (u8 *)malloc(10 * size);
-    array.max_count = 10;
+    array.max_count = count;
     
     return array;
 }

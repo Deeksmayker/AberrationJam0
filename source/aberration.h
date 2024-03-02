@@ -44,19 +44,27 @@ struct Player{
     Vector2 velocity;
 };
 
+struct Tilemap{
+    u32 width = 30;  
+    u32 height = 30;  
+    int **tiles;
+};
+
 struct Game{
     Input input;
     f32 delta;
-    f32 gravity = -30.0f;
+    f32 gravity = -60.0f;
     Array entities;
     Array walls;
     Player player;
+    Tilemap tilemap;
 };
 
 struct collision_data{
     Entity *entity;  
 };
 
+global_variable Vector2 camera_position;
 
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color);
 void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color);
@@ -72,6 +80,8 @@ void apply_friction(Vector2 *velocity, f32 delta, f32 friction);
 void check_player_collisions(Game *game);
 b32  check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);
 b32  check_box_collision(Entity *rect1, Entity *rect2);
+
+int **level1_tilemap();
 
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
