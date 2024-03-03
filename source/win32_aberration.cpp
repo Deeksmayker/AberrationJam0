@@ -25,10 +25,12 @@ typedef double f64;
 #include "aberration.cpp"
 
 #include <windows.h>
+#include <Windowsx.h>
 
 struct win32_offscreen_buffer{ 
     BITMAPINFO Info;
     void *Memory;
+    int ScreenWidth; int ScreenHeight;
     int Width;
     int Height;
     int Pitch;
@@ -81,8 +83,8 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height){
 
 internal void
 Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int WindowHeight,
-                           win32_offscreen_buffer *Buffer,
-                           int X, int Y, int Width, int Height) // Guys on this line don't used
+                           win32_offscreen_buffer *Buffer)
+                          
 {
     StretchDIBits(DeviceContext,
                   /*
@@ -159,6 +161,15 @@ Win32MainWindowCallback(HWND Window,
                 GlobalRunning = false;
             }
         } break;
+        
+        case WM_MOUSEMOVE:{
+            i32 xPos = GET_X_LPARAM(LParam); 
+            i32 yPos = GET_Y_LPARAM(LParam);
+            
+            //printf("%d\n", xPos);
+            
+            input.mouse_screen_position = {(f32)xPos, (f32)(GlobalBackBuffer.ScreenHeight - yPos)};
+        } break;
     
         case WM_SIZE:{
         } break;
@@ -182,7 +193,10 @@ Win32MainWindowCallback(HWND Window,
             
             win32_window_dimension Dimension = Win32GetWindowDimension(Window);
             
-            Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, X, Y, Width, Height);
+            GlobalBackBuffer.ScreenWidth = Dimension.Width;
+            GlobalBackBuffer.ScreenHeight = Dimension.Height;
+            
+            Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer);
             
             //PatBlt(DeviceContext, X, Y, Width, Height, WHITENESS);
   
@@ -263,17 +277,19 @@ int CALLBACK WinMain(HINSTANCE Instance,
         }
         
         screen_buffer GameBuffer = {};
-        GameBuffer.Memory = GlobalBackBuffer.Memory;
-        GameBuffer.Width = GlobalBackBuffer.Width;
-        GameBuffer.Height = GlobalBackBuffer.Height;
-        GameBuffer.Pitch = GlobalBackBuffer.Pitch;
+        GameBuffer.Memory       = GlobalBackBuffer.Memory;
+        GameBuffer.Width        = GlobalBackBuffer.Width;
+        GameBuffer.Height       = GlobalBackBuffer.Height;
+        GameBuffer.Pitch        = GlobalBackBuffer.Pitch;
+        GameBuffer.ScreenWidth  = GlobalBackBuffer.ScreenWidth;
+        GameBuffer.ScreenHeight = GlobalBackBuffer.ScreenHeight;
                 
         GameUpdateAndRender(delta, input, &GameBuffer);
         
         HDC DeviceContext = GetDC(Window);
         win32_window_dimension Dimension = Win32GetWindowDimension(Window);
         
-        Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, 0, 0, Dimension.Width, Dimension.Height);
+        Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer);
         ReleaseDC(Window, DeviceContext);
         
         i64 EndCycleCount = __rdtsc();

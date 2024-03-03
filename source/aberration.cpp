@@ -66,19 +66,6 @@ void fill_background(screen_buffer *Buffer, u32 color){
 
 Game global_game;
 
-int level1[10][10] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-};
-
 void InitGame(){
     global_game = {};
     global_game.entities = array_init(sizeof(Entity));
@@ -88,6 +75,7 @@ void InitGame(){
     global_game.player.entity.position = {30, 30};
     global_game.player.entity.scale = {3, 3};
     
+    /*
     global_game.walls = array_init(sizeof(Entity));
     
     Entity floor = {};
@@ -99,11 +87,23 @@ void InitGame(){
     right_wall.position = {100, 30};
     right_wall.scale = {5, 150};
     array_add(&global_game.walls, &right_wall);
+    */
     
     global_game.tilemap = {};
+    
+    //fill_level1_tilemap(&global_game);
 }
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
+    f32 mouse_world_position_x = ((f32)input.mouse_screen_position.x /
+                                 ((f32)Buffer->ScreenWidth / (f32)Buffer->Width)) / 
+                                 global_game.unit_size;
+    f32 mouse_world_position_y = ((f32)input.mouse_screen_position.y /
+                                 ((f32)Buffer->ScreenHeight / (f32)Buffer->Height)) / 
+                                 global_game.unit_size;
+                                 
+    input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y};
+
     global_game.input = input;
     global_game.delta = delta;
 
@@ -121,10 +121,6 @@ void update(Game *game){
 }
 
 void update_player(Game *game){
-    if (game->input.jump_key && game->player.grounded){
-        game->player.velocity.y += game->player.jump_force;
-    }
-
     f32 vertical = 0;
     if (game->input.up_key) vertical = 1;
     if (game->input.down_key) vertical = -1;
@@ -135,13 +131,24 @@ void update_player(Game *game){
     
     f32 wish_speed = horizontal * game->player.base_speed;
     
-    accelerate(&(game->player.velocity), game->delta, game->player.base_speed, wish_speed, horizontal, game->player.acceleration);
+    accelerate(&(game->player.velocity), game->delta,
+               game->player.base_speed, wish_speed, horizontal,
+               game->player.grounded ? game->player.acceleration : game->player.air_acceleration);
     
-    apply_friction(&(game->player.velocity), game->delta, game->player.friction);
+    if (game->player.grounded){
+        apply_friction(&(game->player.velocity), game->player.base_speed, game->delta, game->player.friction);
+    }
     
     if (!game->player.grounded){
         game->player.velocity.y += game->gravity * game->delta;
     }
+    
+    if (game->input.jump_key && game->player.grounded){
+        game->player.velocity.y += game->player.jump_force;
+        
+        game->player.velocity.x += horizontal * game->player.jump_speed_boost;
+    }
+
     
     check_player_collisions(game);
     //printf("%d\n", (int)game->player.velocity.x);
@@ -152,13 +159,16 @@ void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, in
 
     f32 new_speed = velocity->x + acceleration * direction * delta;
     
-    if (abs(new_speed) > base_speed){
-        new_speed = base_speed * direction;
+    if (abs(new_speed) > base_speed && new_speed * direction > 0){
+        new_speed = velocity->x;
     }
     
     velocity->x = new_speed;
 }
-void apply_friction(Vector2 *velocity, f32 delta, f32 friction){
+void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
+    if (abs(velocity->x) > max_speed){
+        friction *= 2 + abs(velocity->x) / max_speed;
+    }
     f32 friction_force = friction * -normalize(velocity->x) * delta;
     velocity->x += friction_force;
 }
@@ -197,6 +207,21 @@ b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position){
             return 1;
         }
     }
+    
+    //Tile collisions
+    for (int y = 0; y < game->tilemap.rows; y++){
+        for (int x = 0; x < game->tilemap.columns; x++){
+            if (level1[y][x] == 0 || level1[y][x] == 2) continue;
+            
+            Entity tile_entity = {};
+            tile_entity.position = {(f32)x * game->tilemap.block_scale, ((f32)game->tilemap.rows - y - 1) * game->tilemap.block_scale}; 
+            tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
+            if (check_box_collision(&future_entity, &tile_entity)){
+                return 1;
+            }
+        }
+    }
+
     
     return 0;
 }
@@ -239,18 +264,68 @@ void render(Game *game, screen_buffer *Buffer){
     draw_entities(game, Buffer);
 
     draw_rect(Buffer, game->player.entity.position, game->player.entity.scale, 0xff3423);
+    
+    draw_rect(Buffer, game->input.mouse_world_position.x, game->input.mouse_world_position.y, 3, 3, 0xbc32fd);
     //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * UNIT_SIZE, player.scale.y * UNIT_SIZE, 0xff5533);
 }
 
 void draw_entities(Game *game, screen_buffer *Buffer){
+    for (int y = 0; y < game->tilemap.rows; y++){
+        for (int x = 0; x < game->tilemap.columns; x++){
+            i32 position_y = game->tilemap.rows - y - 1;
+            i32 position_x = x;
+
+            switch ((TileType)level1[y][x]){
+                case None:{
+                    continue;
+                } break;
+                case Ground:{
+                    draw_rect(Buffer, position_x * game->tilemap.block_scale, position_y * game->tilemap.block_scale,
+                              game->tilemap.block_scale, game->tilemap.block_scale, 0x66ffff);
+                } break;
+                case Pole:{
+                    draw_rect(Buffer, position_x * game->tilemap.block_scale, position_y * game->tilemap.block_scale,
+                              game->tilemap.block_scale * 0.2, game->tilemap.block_scale, 0x22ff22);
+                } break;
+            }
+            
+        }
+    }
+
+    /*
     for (int i = 0; i < game->walls.count; i++){
         //printf("%d\n",  (int)((Entity *)array_get(&game->walls, 1))->position.y);
         draw_rect(Buffer, ((Entity *)array_get(&game->walls, i))->position, ((Entity *)array_get(&game->walls, i))->scale, 0x44aaaa);
     }
+    */
 }
+
 /*
-int **level1_tilemap(){
-    int tilemap[10][10];
-    return tilemap;
+void fill_level1_tilemap(Game *game){
+    game->tilemap.tiles = (int **)malloc(game->tilemap.rows * sizeof(int));
+    
+    for (int i = 0; i < game->tilemap.rows; i++){
+        game->tilemap.tiles[i] = (int *)malloc(game->tilemap.columns * sizeof(int));
+    }
+    
+    for (int y = 0; y < game->tilemap.rows; y++){
+        for (int x = 0; x < game->tilemap.columns; x++){
+            game->tilemap.tiles[y][x] = level1[y][x];
+        }
+    }
+    
+    tiles = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    };
+
 }
 */
