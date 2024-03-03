@@ -162,6 +162,22 @@ Win32MainWindowCallback(HWND Window,
             }
         } break;
         
+        case WM_LBUTTONDOWN:{
+            input.mouse_left_key = 1;
+        } break; 
+        
+        case WM_LBUTTONUP:{
+            input.mouse_left_key = 0;
+        } break;
+        
+        case WM_RBUTTONDOWN:{
+            input.mouse_right_key = 1;
+        } break; 
+        
+        case WM_RBUTTONUP:{
+            input.mouse_right_key = 0;
+        } break;
+        
         case WM_MOUSEMOVE:{
             i32 xPos = GET_X_LPARAM(LParam); 
             i32 yPos = GET_Y_LPARAM(LParam);
