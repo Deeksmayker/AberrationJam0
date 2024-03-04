@@ -8,6 +8,8 @@
 
 #define UNIT_SIZE 10.0f;
 
+global_variable int collisions_count = 8;
+
 struct Vector2{
     f32 x;  
     f32 y;  
@@ -59,8 +61,9 @@ struct Player{
     f32 acceleration = 80;
     f32 air_acceleration = 60;
     f32 friction = 60;
-    f32 jump_force = 30;
+    f32 jump_force = 60;
     f32 jump_speed_boost = 20;
+    f32 gravity_multiplier = 1;
     Vector2 velocity;
     
     f32 melee_cooldown_timer;
@@ -79,6 +82,17 @@ struct Tilemap{
     u32 block_scale = 4;
 };
 
+struct collision{
+    Vector2 normal;  
+    Vector2 *obstacle_velocity;
+    
+    b32 collided;
+    
+    union{
+        TileType tile_type;  
+    };
+};
+
 struct Game{
     f32 unit_size = 10.0f;
     Input input;
@@ -90,10 +104,6 @@ struct Game{
     Array particles;
     Player player;
     Tilemap tilemap;
-};
-
-struct collision_data{
-    Entity *entity;  
 };
 
 global_variable Vector2 camera_position;
@@ -111,6 +121,10 @@ void update_particles(Game *game);
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration);
 void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction);
 void check_player_collisions(Game *game);
+void calculate_player_tilemap_collisions(Game *game, collision *collisions_data);
+void calculate_particle_tilemap_collisions(Game *game, Particle *particle, collision *collisions_data);
+collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity);
+collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity);
 b32  check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);
 b32  check_box_collision(Entity *rect1, Entity *rect2);
 

@@ -32,12 +32,21 @@ Vector2 add(Vector2 first, Vector2 second){
     return {first.x + second.x, first.y + second.y};
 }
 
+void add(Vector2 *first, Vector2 second){
+    first->x += second.x;
+    first->y += second.y;
+}
+
 Vector2 subtract(Vector2 first, Vector2 second){
     return {first.x - second.x, first.y - second.y};
 }
 
 Vector2 multiply(Vector2 vector, f32 value){
     return {vector.x * value, vector.y * value};
+}
+
+Vector2 multiply(Vector2 first, Vector2 second){
+    return {first.x * second.x, first.y * second.y};
 }
 
 Vector2 divide(Vector2 vector, f32 value){

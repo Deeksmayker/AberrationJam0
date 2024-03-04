@@ -103,12 +103,6 @@ void InitGame(){
     global_game.player.shoot_emmiter.count_min = 10;
     global_game.player.shoot_emmiter.count_max = 30;
     
-    rnd_state = 465456465;
-    printf("\n%f", rnd(0.0f, 1.0f)); 
-    rnd_state = 465456466;
-    
-    printf("\n%f", rnd(0.0f, 1.0f)); 
-    
     //fill_level1_tilemap(&global_game);
 }
 
@@ -145,6 +139,7 @@ void update(Game *game){
 }
 
 void update_player(Game *game){
+    Player *player = &game->player;
 
     f32 vertical = 0;
     if (game->input.up_key) vertical = 1;
@@ -164,8 +159,15 @@ void update_player(Game *game){
         apply_friction(&(game->player.velocity), game->player.base_speed, game->delta, game->player.friction);
     }
     
+    
     if (!game->player.grounded){
-        game->player.velocity.y += game->gravity * game->delta;
+        if (player->velocity.y > player->jump_force * 0.5f){
+            player->gravity_multiplier = player->velocity.y / (player->jump_force * 0.5f);
+        } else{
+            player->gravity_multiplier = 1;
+        }
+        
+        game->player.velocity.y += game->gravity * player->gravity_multiplier * game->delta;
     }
     
     if (game->input.jump_key && game->player.grounded){
@@ -213,22 +215,7 @@ void update_particles(Game *game){
         particle->lifetime += game->delta;
         particle->velocity.y += game->gravity * game->delta;
         
-        Vector2 vertical_wish_position = 
-               {particle->entity.position.x,
-                particle->entity.position.y + particle->velocity.y * game->delta};
-        Vector2 horizontal_wish_position = 
-               {particle->entity.position.x + particle->velocity.x * game->delta,
-                particle->entity.position.y};
-        
-        if(check_entity_collisions(game, &particle->entity, vertical_wish_position)){
-            if (particle->velocity.y <= 0){
-                apply_friction(&particle->velocity, 50, game->delta, game->player.friction);
-            }
-            particle->velocity.y -= particle->velocity.y * 1.5f;
-        }
-        if(check_entity_collisions(game, &particle->entity, horizontal_wish_position)){
-            particle->velocity.x -= particle->velocity.x * 1.5f;
-        }
+        calculate_particle_tilemap_collisions(game, particle, check_tilemap_collisions(game, particle->velocity, particle->entity));
         
         Vector2 next_position = add(particle->entity.position, multiply(particle->velocity, game->delta));
         
@@ -236,29 +223,140 @@ void update_particles(Game *game){
     }
 }
 
-void check_player_collisions(Game *game){
-    game->player.grounded = 0;
-
-    Vector2 vertical_wish_position = 
-           {game->player.entity.position.x,
-            game->player.entity.position.y + game->player.velocity.y * game->delta};
-    Vector2 horizontal_wish_position = 
-           {game->player.entity.position.x + game->player.velocity.x * game->delta,
-            game->player.entity.position.y};
-            
-    if (check_entity_collisions(game, &game->player.entity, vertical_wish_position)){
-        if (game->player.velocity.y < 0){
-            game->player.grounded = 1;
+void calculate_particle_tilemap_collisions(Game *game, Particle *particle, collision *collisions_data){
+    for (int i = 0; i < collisions_count; i++){
+        if (!collisions_data[i].collided) break;
+        switch (collisions_data[i].tile_type){
+            case Ground:{
+                if (collisions_data[i].normal.y > 0){
+                    apply_friction(&particle->velocity, 50, game->delta, game->player.friction * 0.7f);
+                }
+                
+                f32 particle_magnitude = magnitude(multiply(particle->velocity, collisions_data[i].normal));
+                
+                Vector2 added_velocity = multiply(collisions_data[i].normal,  particle_magnitude);
+                
+                added_velocity = multiply(added_velocity, 1.2f);
+                
+                add(&particle->velocity, added_velocity);
+            } break;
         }
-        game->player.velocity.y -= game->player.velocity.y;
     }
     
-    if (check_entity_collisions(game, &game->player.entity, horizontal_wish_position)){
-        game->player.velocity.x -= game->player.velocity.x;
-    }
+    free(collisions_data);
 }
 
 
+void check_player_collisions(Game *game){
+    game->player.grounded = 0;
+    
+    calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
+    
+
+    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {0, game->player.velocity.y}, game->player.entity));
+    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {game->player.velocity.x, 0}, game->player.entity));
+}
+
+void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){
+    Player *player = &game->player;
+    
+    for (int i = 0; i < collisions_count; i++){
+        if (!collisions_data[i].collided) break;
+        switch (collisions_data[i].tile_type){
+            case Ground:{
+                if (collisions_data[i].normal.y > 0){
+                    player->grounded = 1;
+                }
+                add(&player->velocity, multiply(collisions_data[i].normal, magnitude(multiply(player->velocity, collisions_data[i].normal))));
+            } break;
+            
+            case Pole:{
+                if (game->input.up_key){
+                    player->velocity.y += 100 * game->delta;
+                }
+            } break;
+        }
+    }
+    
+    free(collisions_data);
+}
+
+collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity){ 
+    collision *collisions_data = (collision *)malloc(collisions_count * sizeof(collision));
+    for (int i = 0; i < collisions_count; i++){
+        collisions_data[i].collided = 0;
+    }
+    int collided_count = 0;
+
+    Entity vertical_future_entity = entity;        
+    vertical_future_entity.position = add(entity.position, {0, velocity.y * game->delta});
+    
+    Entity horizontal_future_entity = entity;        
+    horizontal_future_entity.position = add(entity.position, {velocity.x * game->delta, 0});
+            
+    for (int y = 0; y < game->tilemap.rows; y++){
+        for (int x = 0; x < game->tilemap.columns; x++){
+            if (collided_count >= collisions_count) break;
+            if (level1[y][x] == 0) continue;
+            Entity tile_entity = {};
+            tile_entity.position = {(f32)x * game->tilemap.block_scale, ((f32)game->tilemap.rows - y - 1) * game->tilemap.block_scale}; 
+            tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
+            
+            
+            if (check_box_collision(&vertical_future_entity, &tile_entity)){
+                collisions_data[collided_count].normal = {0, -normalize(velocity.y)};
+                collisions_data[collided_count].tile_type = (TileType)level1[y][x];
+                collisions_data[collided_count].collided = 1;
+                collided_count++;
+            }
+            if (velocity.x != 0 && check_box_collision(&horizontal_future_entity, &tile_entity)){
+                collisions_data[collided_count].normal = {-normalize(velocity.x), 0};
+                collisions_data[collided_count].tile_type = (TileType)level1[y][x];
+                collisions_data[collided_count].collided = 1;
+                collided_count++;
+            }
+        }
+    }
+    
+    return collisions_data;
+}
+
+collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity){
+    Entity vertical_future_entity = entity;        
+    vertical_future_entity.position = add(entity.position, {0, velocity.y * game->delta});
+    
+    Entity horizontal_future_entity = entity;        
+    horizontal_future_entity.position = add(entity.position, {velocity.x * game->delta, 0});
+    
+    collision collision_data = {};
+    collision_data.collided = 0;
+
+    for (int i = 0; i < game->particles.count; i++){
+        Particle *particle = (Particle *)array_get(&game->particles, i);
+        if (particle->lifetime < 1) {
+            continue;
+        }
+        if (check_box_collision(&vertical_future_entity, &(particle->entity))){
+            collision_data.normal   = {0, -normalize(velocity.y)};
+            collision_data.obstacle_velocity =  &particle->velocity;
+            collision_data.collided = 1;
+            return collision_data;            
+        }
+        
+        if (check_box_collision(&horizontal_future_entity, &(particle->entity))){
+            
+            collision_data.normal   = {-normalize(velocity.x), 0};
+            collision_data.obstacle_velocity =  &particle->velocity;
+            collision_data.collided = 1;
+            return collision_data;            
+        }
+    }
+
+    return collision_data;
+}
+
+
+//@OBSOLETE
 b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position){
     Entity future_entity = *entity;
     future_entity.position = wish_position;
@@ -270,31 +368,6 @@ b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position){
             return 1;
         }
     }
-    
-    //Tile collisions
-    for (int y = 0; y < game->tilemap.rows; y++){
-        for (int x = 0; x < game->tilemap.columns; x++){
-            if (level1[y][x] == 0 || level1[y][x] == 2) continue;
-            
-            Entity tile_entity = {};
-            tile_entity.position = {(f32)x * game->tilemap.block_scale, ((f32)game->tilemap.rows - y - 1) * game->tilemap.block_scale}; 
-            tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
-            if (check_box_collision(&future_entity, &tile_entity)){
-                return 1;
-            }
-        }
-    }
-
-    for (int i = 0; i < game->particles.count; i++){
-        Particle *particle = (Particle *)array_get(&game->particles, i);
-        if (particle->lifetime < 1) {
-            continue;
-        }
-        if (check_box_collision(&future_entity, &(particle->entity))){
-            return 1;
-        }
-    }
-    
     return 0;
 }
 
@@ -420,7 +493,12 @@ void setup_particles(Game *game, particle_emmiter emmiter){
         particle.entity.position = game->player.entity.position;
         f32 scale = rnd(game->player.shoot_emmiter.scale_min, game->player.shoot_emmiter.scale_max);
         particle.entity.scale = {scale, scale};
-        particle.velocity = multiply({rnd(direction.x-0.2f, direction.x + 0.2f), rnd(direction.y-0.2f, direction.y+0.2f)}, rnd(game->player.shoot_emmiter.speed_min, game->player.shoot_emmiter.speed_max));
+        rnd_state += i * count * 2344;
+        Vector2 randomized_direction = {rnd(direction.x - 0.2f, direction.x + 0.2f),
+                                        rnd(direction.y - 0.2f, direction.y + 0.2f)};
+        rnd_state += i * count * 2344;
+        f32 randomized_speed = rnd(game->player.shoot_emmiter.speed_min, game->player.shoot_emmiter.speed_max);
+        particle.velocity = multiply(randomized_direction, randomized_speed);
         
         array_add(&game->particles, &particle);
     }
