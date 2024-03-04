@@ -27,5 +27,14 @@ void array_add(Array *array, void *value){
     array->count++;
 }
 
+void array_remove(Array *array, int index){
+    for (int i = index; i < array->count - 1; i++){
+        u8 *current_element = array_get(array, i);
+        u8 *next_element = array_get(array, i + 1);
+        memmove(current_element, next_element, array->size);
+    }
+    
+    array->count--;
+}
 
 

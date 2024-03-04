@@ -22,10 +22,10 @@ void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f
     xPosition -= camera_position.x;
     yPosition -= camera_position.y;
 
-    width  *= UNIT_SIZE;
-    height *= UNIT_SIZE;
-    xPosition *= UNIT_SIZE;
-    yPosition *= UNIT_SIZE;
+    width  *= unit_size;
+    height *= unit_size;
+    xPosition *= unit_size;
+    yPosition *= unit_size;
     u8 *row = (u8 *) Buffer->Memory;
     
     i32 upPosition     = clamp((i32)yPosition + (i32)(height * 0.5f), 0, Buffer->Height - 1);
@@ -95,13 +95,16 @@ void InitGame(){
     
     global_game.tilemap = {};
     
-    global_game.player.shoot_emmiter = {};
-    global_game.player.shoot_emmiter.speed_min = 20;
-    global_game.player.shoot_emmiter.speed_max = 50;
-    global_game.player.shoot_emmiter.scale_min = 1;
-    global_game.player.shoot_emmiter.scale_max = 3;
-    global_game.player.shoot_emmiter.count_min = 10;
-    global_game.player.shoot_emmiter.count_max = 30;
+    particle_emitter *emitter = &global_game.player.shoot_emitter;
+    *emitter = {};
+    emitter->speed_min    = 40;
+    emitter->speed_max    = 150;
+    emitter->scale_min    = 1;
+    emitter->scale_max    = 2;
+    emitter->count_min    = 30;
+    emitter->count_max    = 80;
+    emitter->lifetime_min = 0.5f;
+    emitter->lifetime_max = 2.0f;
     
     //fill_level1_tilemap(&global_game);
 }
@@ -109,13 +112,15 @@ void InitGame(){
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     rand_seed = (u32)(global_game.delta * 100000000000.0f);
     rnd_state = rand_seed;
+    
+    //unit_size = lerp(unit_size, 0.1f, delta * 0.5f);
 
     f32 mouse_world_position_x = ((f32)input.mouse_screen_position.x /
                                  ((f32)Buffer->ScreenWidth / (f32)Buffer->Width)) / 
-                                 global_game.unit_size;
+                                 unit_size;
     f32 mouse_world_position_y = ((f32)input.mouse_screen_position.y /
                                  ((f32)Buffer->ScreenHeight / (f32)Buffer->Height)) / 
-                                 global_game.unit_size;
+                                 unit_size;
                                  
     input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y};
 
@@ -148,6 +153,10 @@ void update_player(Game *game){
     f32 horizontal = 0;
     if (game->input.right_key) horizontal = 1;
     if (game->input.left_key)  horizontal = -1;
+    
+    if (player->riding_pole){
+        horizontal = 0;
+    }
     
     f32 wish_speed = horizontal * game->player.base_speed;
     
@@ -182,7 +191,8 @@ void update_player(Game *game){
     
     
     if (game->input.mouse_left_key && game->player.melee_cooldown_timer <= 0){
-        setup_particles(game, game->player.shoot_emmiter);
+        Vector2 direction = subtract(game->input.mouse_world_position, game->player.entity.position);
+        emit_particles(game, game->player.shoot_emitter, direction, player->entity.position);
         game->player.melee_cooldown_timer = 0.5f;
     }
     
@@ -192,7 +202,6 @@ void update_player(Game *game){
 
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration){
     if (direction == 0) return;
-
     f32 new_speed = velocity->x + acceleration * direction * delta;
     
     if (abs(new_speed) > base_speed && new_speed * direction > 0){
@@ -209,10 +218,57 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
     velocity->x += friction_force;
 }
 
+void check_player_collisions(Game *game){
+    game->player.grounded = 0;
+    
+    calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
+    
+
+    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {0, game->player.velocity.y}, game->player.entity));
+    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {game->player.velocity.x, 0}, game->player.entity));
+}
+
+void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){
+    Player *player = &game->player;
+    
+    player->riding_pole = 0;
+    
+    for (int i = 0; i < collisions_count; i++){
+        if (!collisions_data[i].collided) break;
+        switch (collisions_data[i].tile_type){
+            case Ground:{
+                if (collisions_data[i].normal.y > 0){
+                    player->grounded = 1;
+                }
+                add(&player->velocity, multiply(collisions_data[i].normal, magnitude(multiply(player->velocity, collisions_data[i].normal))));
+            } break;
+            
+            case Pole:{
+                if (game->input.up_key){
+                    player->velocity.y += 100 * game->delta;
+                    player->velocity.x *= 1.0f - game->delta * 1;
+                    player->riding_pole = 1;
+                }
+            } break;
+        }
+    }
+    
+    free(collisions_data);
+}
+
 void update_particles(Game *game){
     for (int i = 0; i < game->particles.count; i++){
         Particle *particle = ((Particle *)array_get(&game->particles, i));
         particle->lifetime += game->delta;
+        
+        if (particle->lifetime >= particle->max_lifetime){
+            array_remove(&game->particles, i);
+            continue;
+        }
+        
+        f32 t_lifetime = particle->lifetime / particle->max_lifetime;
+        particle->entity.scale = lerp(particle->original_scale, Vector2_zero, t_lifetime * t_lifetime);
+        
         particle->velocity.y += game->gravity * game->delta;
         
         calculate_particle_tilemap_collisions(game, particle, check_tilemap_collisions(game, particle->velocity, particle->entity));
@@ -246,40 +302,6 @@ void calculate_particle_tilemap_collisions(Game *game, Particle *particle, colli
     free(collisions_data);
 }
 
-
-void check_player_collisions(Game *game){
-    game->player.grounded = 0;
-    
-    calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
-    
-
-    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {0, game->player.velocity.y}, game->player.entity));
-    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {game->player.velocity.x, 0}, game->player.entity));
-}
-
-void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){
-    Player *player = &game->player;
-    
-    for (int i = 0; i < collisions_count; i++){
-        if (!collisions_data[i].collided) break;
-        switch (collisions_data[i].tile_type){
-            case Ground:{
-                if (collisions_data[i].normal.y > 0){
-                    player->grounded = 1;
-                }
-                add(&player->velocity, multiply(collisions_data[i].normal, magnitude(multiply(player->velocity, collisions_data[i].normal))));
-            } break;
-            
-            case Pole:{
-                if (game->input.up_key){
-                    player->velocity.y += 100 * game->delta;
-                }
-            } break;
-        }
-    }
-    
-    free(collisions_data);
-}
 
 collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity){ 
     collision *collisions_data = (collision *)malloc(collisions_count * sizeof(collision));
@@ -411,7 +433,7 @@ void render(Game *game, screen_buffer *Buffer){
     draw_rect(Buffer, game->player.entity.position, game->player.entity.scale, 0xff3423);
     
     //draw_rect(Buffer, game->input.mouse_world_position.x, game->input.mouse_world_position.y, 3, 3, 0xbc32fd);
-    //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * UNIT_SIZE, player.scale.y * UNIT_SIZE, 0xff5533);
+    //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * unit_size, player.scale.y * unit_size, 0xff5533);
 }
 
 void draw_entities(Game *game, screen_buffer *Buffer){
@@ -480,28 +502,43 @@ void fill_level1_tilemap(Game *game){
 }
 */
 
-void setup_particles(Game *game, particle_emmiter emmiter){
-    Vector2 direction = subtract(game->input.mouse_world_position, game->player.entity.position);
+void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position){
     normalize(&direction);
     rnd_state++;
-    int count = rnd((int)game->player.shoot_emmiter.count_min, (int)game->player.shoot_emmiter.count_max);
+    int count = rnd((int)emitter.count_min, (int)emitter.count_max);
     
     for (int i = 0; i < count; i++){
-        rnd_state += i * count * 2344;
-        Particle particle = {};
-        particle.entity = {};
-        particle.entity.position = game->player.entity.position;
-        f32 scale = rnd(game->player.shoot_emmiter.scale_min, game->player.shoot_emmiter.scale_max);
-        particle.entity.scale = {scale, scale};
-        rnd_state += i * count * 2344;
-        Vector2 randomized_direction = {rnd(direction.x - 0.2f, direction.x + 0.2f),
-                                        rnd(direction.y - 0.2f, direction.y + 0.2f)};
-        rnd_state += i * count * 2344;
-        f32 randomized_speed = rnd(game->player.shoot_emmiter.speed_min, game->player.shoot_emmiter.speed_max);
-        particle.velocity = multiply(randomized_direction, randomized_speed);
-        
-        array_add(&game->particles, &particle);
+        shoot_particle(game, emitter, direction, start_position, i+1);
     }
+}
+
+void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, u32 seed_multiplier){
+    rnd_state = (rnd_state + 1) * 3;
+    Particle particle = {};
+    particle.entity = {};
+    particle.entity.position = start_position;
+    
+    f32 scale = rnd(emitter.scale_min, emitter.scale_max);
+    particle.entity.scale = {scale, scale};
+    particle.original_scale = {scale, scale};
+    
+    rnd_state = (rnd_state + 1) * 3;
+    f32 x_direction = rnd(direction.x - 0.2f, direction.x + 0.2f);
+    rnd_state = (rnd_state + 1) * 3;
+    f32 y_direction = rnd(direction.y - 0.2f, direction.y + 0.2f);
+    Vector2 randomized_direction = {x_direction, y_direction};
+                                    
+    rnd_state = (rnd_state + 1) * 3;
+    f32 randomized_speed = rnd(emitter.speed_min, emitter.speed_max);
+    
+    rnd_state = (rnd_state + 1) * 3;
+    f32 lifetime = rnd(emitter.lifetime_min, emitter.lifetime_max);
+    particle.max_lifetime = lifetime;
+    
+    particle.velocity = multiply(randomized_direction, randomized_speed);
+    
+    array_add(&game->particles, &particle);
+    
 }
 
 void debug_update(Game *game){

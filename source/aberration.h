@@ -9,6 +9,7 @@
 #define UNIT_SIZE 10.0f;
 
 global_variable int collisions_count = 8;
+global_variable f32 unit_size = 7.0f;
 
 struct Vector2{
     f32 x;  
@@ -45,29 +46,42 @@ struct screen_buffer{
 struct Particle{
     Entity entity;  
     Vector2 velocity;
+    Vector2 original_scale;
     f32 lifetime;
+    f32 max_lifetime;
 };
 
-struct particle_emmiter{
-    u32 count_min, count_max;
-    f32 speed_min, speed_max;  
-    f32 scale_min, scale_max;
+struct particle_emitter{
+    b32 emitting;
+    u32 per_second;
+    u32 count_min = 10;
+    u32 count_max = 50;
+    f32 speed_min = 50;
+    f32 speed_max = 100;  
+    f32 scale_min = 0.5f;
+    f32 scale_max = 2;
+    f32 spread = 0.2f;
+    f32 lifetime_min = 0.5f;
+    f32 lifetime_max = 2;
+    
+    u32 color = 0x34f132;
 };
 
 struct Player{  
     Entity entity;
     b32 grounded;
+    b32 riding_pole;
     f32 base_speed = 20;
     f32 acceleration = 80;
     f32 air_acceleration = 60;
     f32 friction = 60;
-    f32 jump_force = 60;
+    f32 jump_force = 45;
     f32 jump_speed_boost = 20;
     f32 gravity_multiplier = 1;
     Vector2 velocity;
     
     f32 melee_cooldown_timer;
-    particle_emmiter shoot_emmiter;
+    particle_emitter shoot_emitter;
 };
 
 enum TileType{
@@ -94,7 +108,6 @@ struct collision{
 };
 
 struct Game{
-    f32 unit_size = 10.0f;
     Input input;
     f64 time;
     f32 delta;
@@ -135,7 +148,8 @@ void fill_level1_tilemap(Game *game);
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
 
-void setup_particles(Game *game, particle_emmiter emmiter);
+void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position);
+void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, u32 seed_multiplier);
 
 
 int level1[30][30] = {
