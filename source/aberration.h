@@ -9,7 +9,7 @@
 #define UNIT_SIZE 10.0f;
 
 global_variable int collisions_count = 8;
-global_variable f32 unit_size = 7.0f;
+global_variable f32 unit_size = 10.0f;
 
 struct Vector2{
     f32 x;  
@@ -32,6 +32,9 @@ struct Input{
     Vector2 mouse_world_position;
     b32 mouse_left_key;
     b32 mouse_right_key;
+    
+    //Debug
+    b32 g_key;
 };
 
 struct screen_buffer{
@@ -58,8 +61,8 @@ struct particle_emitter{
     u32 count_max = 50;
     f32 speed_min = 50;
     f32 speed_max = 100;  
-    f32 scale_min = 0.5f;
-    f32 scale_max = 2;
+    f32 scale_min = 0.1f;
+    f32 scale_max = 0.5f;
     f32 spread = 0.2f;
     f32 lifetime_min = 0.5f;
     f32 lifetime_max = 2;
@@ -123,6 +126,8 @@ global_variable Vector2 camera_position;
 
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color);
 void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color);
+void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color);
+void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 width, u32 color);
 
 void fill_background(screen_buffer *Buffer, u32 color);
 

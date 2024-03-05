@@ -55,6 +55,24 @@ void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color)
     draw_rect(Buffer, position.x, position.y, size.x, size.y, color);
 }
 
+void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color){
+    Vector2 vector_to_end = subtract({end_x, end_y}, {start_x, start_y});
+    int points_count = (int)magnitude(vector_to_end) * 3;
+    
+    for (int i = 0; i <= points_count; i++){
+        f32 t = lerp((f32)0, (f32)1, (f32)i / (f32)points_count);
+        
+        f32 x = lerp(start_x, end_x, t);
+        f32 y = lerp(start_y, end_y, t);
+        
+        draw_rect(Buffer, x, y, width, width, color);
+    }
+}
+void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 width, u32 color){
+    draw_line(Buffer, start_position.x, start_position.y, end_position.x, end_position.y, width, color);
+}
+
+
 void fill_background(screen_buffer *Buffer, u32 color){
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
@@ -99,12 +117,12 @@ void InitGame(){
     *emitter = {};
     emitter->speed_min    = 40;
     emitter->speed_max    = 150;
-    emitter->scale_min    = 1;
-    emitter->scale_max    = 2;
+    emitter->scale_min    = 0.15f;
+    emitter->scale_max    = 0.5f;
     emitter->count_min    = 30;
     emitter->count_max    = 80;
-    emitter->lifetime_min = 0.5f;
-    emitter->lifetime_max = 2.0f;
+    emitter->lifetime_min = 0.1f;
+    emitter->lifetime_max = 0.5f;
     
     //fill_level1_tilemap(&global_game);
 }
@@ -431,6 +449,8 @@ void render(Game *game, screen_buffer *Buffer){
     draw_entities(game, Buffer);
 
     draw_rect(Buffer, game->player.entity.position, game->player.entity.scale, 0xff3423);
+    //Vector2 added = add(game->player.entity.position, {10, 10});
+    draw_line(Buffer, game->player.entity.position, game->input.mouse_world_position, 0.2f, 0xff5533);
     
     //draw_rect(Buffer, game->input.mouse_world_position.x, game->input.mouse_world_position.y, 3, 3, 0xbc32fd);
     //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * unit_size, player.scale.y * unit_size, 0xff5533);
@@ -462,45 +482,10 @@ void draw_entities(Game *game, screen_buffer *Buffer){
     //particles
     for (int i = 0; i < game->particles.count; i++){
         Particle *particle = ((Particle *)array_get(&game->particles, i));
-        draw_rect(Buffer, particle->entity.position, particle->entity.scale, 0x445663);
+        Vector2 end_position = add(particle->entity.position, multiply(particle->velocity, 0.05f));
+        draw_line(Buffer, particle->entity.position, end_position, particle->entity.scale.x, 0x445663);
     }
-    /*
-    for (int i = 0; i < game->walls.count; i++){
-        //printf("%d\n",  (int)((Entity *)array_get(&game->walls, 1))->position.y);
-        draw_rect(Buffer, ((Entity *)array_get(&game->walls, i))->position, ((Entity *)array_get(&game->walls, i))->scale, 0x44aaaa);
-    }
-    */
 }
-
-/*
-void fill_level1_tilemap(Game *game){
-    game->tilemap.tiles = (int **)malloc(game->tilemap.rows * sizeof(int));
-    
-    for (int i = 0; i < game->tilemap.rows; i++){
-        game->tilemap.tiles[i] = (int *)malloc(game->tilemap.columns * sizeof(int));
-    }
-    
-    for (int y = 0; y < game->tilemap.rows; y++){
-        for (int x = 0; x < game->tilemap.columns; x++){
-            game->tilemap.tiles[y][x] = level1[y][x];
-        }
-    }
-    
-    tiles = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-    };
-
-}
-*/
 
 void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position){
     normalize(&direction);
@@ -542,7 +527,7 @@ void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vec
 }
 
 void debug_update(Game *game){
-    if (game->input.mouse_right_key){
+    if (game->input.g_key){
         game->player.entity.position = game->input.mouse_world_position;
     }
 }

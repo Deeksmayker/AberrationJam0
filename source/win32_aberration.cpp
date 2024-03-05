@@ -138,6 +138,10 @@ Win32MainWindowCallback(HWND Window,
                     input.left_key = IsDown;
                 } break;
                 
+                case 'G':{
+                    input.g_key = IsDown;
+                } break;
+                
                 case VK_SPACE:{
                     input.jump_key = IsDown;  
                 } break;
