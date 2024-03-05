@@ -55,9 +55,11 @@ void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color)
     draw_rect(Buffer, position.x, position.y, size.x, size.y, color);
 }
 
+
+
 void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color){
     Vector2 vector_to_end = subtract({end_x, end_y}, {start_x, start_y});
-    int points_count = ((int)magnitude(vector_to_end) + 1) * 4;
+    int points_count = (((int)magnitude(vector_to_end) + 10) * 4);
     
     for (int i = 0; i <= points_count; i++){
         f32 t = lerp((f32)0, (f32)1, (f32)i / (f32)points_count);
@@ -96,6 +98,8 @@ void InitGame(){
     global_game.player.entity.scale = {3, 3};
     
     global_game.particles = array_init(sizeof(Particle), 100000);
+    
+    global_game.line_entities = array_init(sizeof(line_entity), 500);
     
     /*
     global_game.walls = array_init(sizeof(Entity));
@@ -243,11 +247,64 @@ void update_player(Game *game){
         game->player.melee_cooldown_timer -= game->delta;
     }
     
+    if (game->input.mouse_right_key && player->melee_cooldown_timer <= 0){
+        player->melee_cooldown_timer = 0.5f;
+        Vector2 direction = subtract(game->input.mouse_world_position, player->entity.position);
+        emit_particles(game, player->shoot_emitter, direction, player->entity.position, 1.0f);
+    }
     
-    if (game->input.mouse_left_key && game->player.melee_cooldown_timer <= 0){
-        Vector2 direction = subtract(game->input.mouse_world_position, game->player.entity.position);
-        emit_particles(game, game->player.shoot_emitter, direction, player->entity.position);
-        game->player.melee_cooldown_timer = 0.5f;
+    if (player->range_cooldown_timer > 0){
+        player->range_cooldown_timer -= game->delta;
+    }
+    
+    //shoot logic
+    if (game->input.mouse_left_key && player->range_cooldown_timer <= 0){
+        player->range_cooldown_timer = 0.5f;
+        
+        Vector2 direction = subtract(game->input.mouse_world_position, player->entity.position);
+        normalize(&direction);
+        
+        Vector2 end_point = add(player->entity.position, multiply(direction, 400));
+        Line line = {};
+        line.start_position = player->entity.position;
+        line.end_position   = end_point;
+        line.width = 0.5f;
+        
+        //shoot line render
+        line_entity visual_line = {};
+        visual_line.line = line;
+        visual_line.line.width = 0.8f;
+        visual_line.color = 0xccaa44;
+        visual_line.max_lifetime = 0.3f;
+        
+        array_add(&game->line_entities, &visual_line);
+        
+        line_hits hits = check_line_collision(game, line);
+        int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
+        
+        for (int i = 0; i < collision_count; i++){
+            if (hits.enter_count > i){
+                emit_particles(game, player->shoot_emitter, multiply(direction, -1), hits.enter_positions[i], 0.5f);
+            }
+            if (hits.exit_count > i){
+                emit_particles(game, player->shoot_emitter, direction, hits.exit_positions[i], 1.0f);
+            }
+            
+            if (hits.enter_count > i && hits.exit_count > i){
+                //bullet line in tiles
+                Line wall_line = {};
+                wall_line.start_position = hits.enter_positions[i];
+                wall_line.end_position   = hits.exit_positions[i];
+                wall_line.width = 0.1f;
+                
+                line_entity wall_visual_line = {};
+                wall_visual_line.line = wall_line;
+                wall_visual_line.color = 0xcccccc;
+                wall_visual_line.max_lifetime = 0;
+                
+                array_add(&game->line_entities, &wall_visual_line);
+            }
+        }
     }
     
     check_player_collisions(game);
@@ -358,6 +415,9 @@ void calculate_particle_tilemap_collisions(Game *game, Particle *particle, colli
     free(collisions_data);
 }
 
+Vector2 get_tile_world_position(Game *game, int x, int y){
+    return {(f32)x * game->tilemap.block_scale, ((f32)game->tilemap.rows - y - 1) * game->tilemap.block_scale};
+}
 
 collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity){ 
     collision *collisions_data = (collision *)malloc(collisions_count * sizeof(collision));
@@ -377,7 +437,7 @@ collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity)
             if (collided_count >= collisions_count) break;
             if (level1[y][x] == 0) continue;
             Entity tile_entity = {};
-            tile_entity.position = {(f32)x * game->tilemap.block_scale, ((f32)game->tilemap.rows - y - 1) * game->tilemap.block_scale}; 
+            tile_entity.position = get_tile_world_position(game, x, y); 
             tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
             
             if (check_box_collision(&vertical_future_entity, &tile_entity)){
@@ -434,23 +494,6 @@ collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity
     return collision_data;
 }
 
-
-//@OBSOLETE
-b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position){
-    Entity future_entity = *entity;
-    future_entity.position = wish_position;
-    for (int i = 0; i < game->walls.count; i++){
-        //printf("truly wall we check %d\n", (int)((Entity *)array_get(&game->walls, 0))->position.y);
-        //printf("truly player we check %d\n", (int)game->player.entity.position.y);
-        
-        if (check_box_collision(&future_entity, (Entity *)array_get(&game->walls, i))){
-            return 1;
-        }
-    }
-    return 0;
-}
-
-
 b32 check_box_collision(Entity *rect1, Entity *rect2){
     f32 rect1X = rect1->position.x;
     f32 rect1Y = rect1->position.y;
@@ -473,14 +516,69 @@ b32 check_box_collision(Entity *rect1, Entity *rect2){
         rect2Y < rect1Y + rect1H)
     {
     */
-    if (solution){
-        return 1;
-    }
     
-    return 0;
+    return solution;
 }
 
+line_hits check_line_collision(Game *game, Line line){
+    Vector2 vector_to_end = subtract(line.end_position, line.start_position);
+    int points_count = (((int)magnitude(vector_to_end) + 1) * 4);
+    
+    Vector2 direction = normalized(vector_to_end);
+    
+    b32 in_some_collider = 0;
+    
+    line_hits hits = {};
+    hits.enter_positions = (Vector2 *)malloc(collisions_count * sizeof(Vector2));
+    hits.exit_positions  = (Vector2 *)malloc(collisions_count * sizeof(Vector2));
+    
+    for (int i = 0; i <= points_count; i++){
+        b32 hit_anything = 0;
+    
+        f32 t = lerp((f32)0, (f32)1, (f32)i / (f32)points_count);
+        
+        f32 point_x = lerp(line.start_position.x, line.end_position.x, t);
+        f32 point_y = lerp(line.start_position.y, line.end_position.y, t);
+        
+        Entity line_point_entity = {};
+        line_point_entity.position = {point_x, point_y};
+        line_point_entity.scale = {line.width, line.width};
+                
+        for (int y = 0; y < game->tilemap.rows && !hit_anything; y++){
+            for (int x = 0; x < game->tilemap.columns && !hit_anything; x++){
+                if (hits.enter_count >= collisions_count || hits.exit_count >= collisions_count){
+                    continue;
+                }
+            
+                if (level1[y][x] == 0 || level1[y][x] == 2) continue;
+                
+                Entity tile_entity = {};
+                tile_entity.position = get_tile_world_position(game, x, y);
+                tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
+                
+                if (check_box_collision(&line_point_entity, &tile_entity)){
+                    if (!in_some_collider){
+                        hits.enter_positions[hits.enter_count] = subtract(line_point_entity.position, multiply(direction, 0.2f));
+                        hits.enter_count++;
+                    }
+                    
+                    in_some_collider = 1;
+                    hit_anything = 1;
+                } 
+            }
+        }
+        
+        if (hits.exit_count < collisions_count && !hit_anything && in_some_collider){
+            hits.exit_positions[hits.exit_count] = add(line_point_entity.position, multiply(direction, 0.2f));
+            hits.exit_count++;
+            
+            in_some_collider = 0;
+        }
 
+    }
+    
+    return hits;
+}
 
 void render(Game *game, screen_buffer *Buffer){
     fill_background(Buffer, 0xffffff);
@@ -548,12 +646,41 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             draw_line(Buffer, particle->entity.position, end_position, particle->entity.scale.x, particle->color);
         }
     }
+    
+    //line entities
+    for (int i = 0; i < game->line_entities.count; i++){
+        line_entity *line = (line_entity *)array_get(&game->line_entities, i);
+        
+        line->lifetime += game->delta;
+        
+        if (line->max_lifetime > 0 && line->lifetime >= line->max_lifetime){
+            array_remove(&game->line_entities, i);
+            continue;
+        }
+        
+        if (line->max_lifetime > 0){
+            f32 time_to_max = line->max_lifetime * 0.6f;
+            
+            if (line->lifetime <= time_to_max){
+                f32 t = line->lifetime / time_to_max;
+                line->visual_width = lerp(0.0f, line->line.width, EaseOutElastic(t));
+            } else{
+                f32 t = (line->lifetime - time_to_max) / (line->max_lifetime - time_to_max);
+                line->visual_width = lerp(line->line.width, 0.0f, EaseInCirc(t));
+            }
+        } else{
+            line->visual_width = line->line.width;
+        }
+        
+        draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_width, line->color);
+    }
 }
 
-void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position){
+void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){
     normalize(&direction);
     rnd_state++;
     int count = rnd((int)emitter.count_min, (int)emitter.count_max);
+    count *= count_multiplier; 
     
     for (int i = 0; i < count; i++){
         shoot_particle(game, emitter, direction, start_position);

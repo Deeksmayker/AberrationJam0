@@ -2,6 +2,8 @@
 
 #include <math.h>
 
+#define PI 3.14159265359f
+
 global_variable Vector2 Vector2_one = {1, 1};
 global_variable Vector2 Vector2_zero = {0, 0};
 
@@ -95,7 +97,7 @@ int lerp_color(uint32_t color1, uint32_t color2, float fraction)
                 (int) ((b2 - b1) * fraction + b1);
 }
 
-float pow(float value, int power){
+float powe(float value, int power){
     if (power == 0) return 1;
     
     if (power & 1) return value * pow(value, power >> 1) * pow (value, power >> 1);
@@ -179,5 +181,24 @@ f32 rnd01(){
 }
 
 
+//Ease functions
+float EaseInOutQuad(float x){
+    return x < 0.5f ? 2.0f * x * x : 1 - (f32)pow(-2 * x + 2, 2) / 2.0f;
+}
 
+float EaseOutQuint(float x){
+    return 1.0f - pow(1.0f - x, 5);
+}
 
+float EaseOutElastic(float x){
+    float c4 = (2 * PI) / 3.0f;
+    
+    return x == 0 ? 0
+      : (x == 1
+      ? 1
+      : pow(2.0f, -10 * x) * sin((x * 10 - 0.75f) * c4) + 1.0f);
+}
+
+f32 EaseInCirc(f32 x){
+    return 1 - sqrt(1 - pow(x, 2));
+}

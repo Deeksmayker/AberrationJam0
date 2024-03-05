@@ -47,8 +47,8 @@ struct screen_buffer{
 };
 
 enum particle_shape{
-    Box = 0,  
-    Line = 1
+    BoxShape = 0,  
+    LineShape = 1
 };
 
 struct Particle{
@@ -94,6 +94,7 @@ struct Player{
     Vector2 velocity;
     
     f32 melee_cooldown_timer;
+    f32 range_cooldown_timer;
     particle_emitter shoot_emitter;
     particle_emitter pole_ride_emitter;
 };
@@ -108,6 +109,28 @@ struct Tilemap{
     u32 rows = 30;  
     u32 columns = 30;  
     u32 block_scale = 4;
+};
+
+struct Line{
+    Vector2 start_position;
+    Vector2 end_position;
+    f32 width;
+};
+
+struct line_entity{
+    Line line;
+    u32 color;
+    f32 lifetime;
+    f32 max_lifetime;
+    f32 visual_width;
+};
+
+struct line_hits{
+    int enter_count;  
+    int exit_count;
+    
+    Vector2 *enter_positions;
+    Vector2 *exit_positions;
 };
 
 struct collision{
@@ -130,6 +153,7 @@ struct Game{
     Array entities;
     Array walls;
     Array particles;
+    Array line_entities;
     Player player;
     Tilemap tilemap;
 };
@@ -155,8 +179,9 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
 void calculate_particle_tilemap_collisions(Game *game, Particle *particle, collision *collisions_data);
 collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity);
 collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity);
-b32  check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);
-b32  check_box_collision(Entity *rect1, Entity *rect2);
+b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);
+b32 check_box_collision(Entity *rect1, Entity *rect2);
+line_hits check_line_collision(Game *game, Line line);
 
 void debug_update(Game *game);
 
@@ -166,7 +191,7 @@ void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
 
 void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position);
-void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position);
+void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position);
 
 
