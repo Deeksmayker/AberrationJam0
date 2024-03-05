@@ -236,7 +236,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      HINSTANCE PrevInstance,
                      LPSTR CommandLine,
                      int ShowCode)
-{
+ {
     LARGE_INTEGER PerfCountFrequencyResult;
     QueryPerformanceFrequency(&PerfCountFrequencyResult);
     i64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;

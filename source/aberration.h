@@ -46,17 +46,27 @@ struct screen_buffer{
     int BytesPerPixel = 4;
 };
 
+enum particle_shape{
+    Box = 0,  
+    Line = 1
+};
+
 struct Particle{
     Entity entity;  
+    particle_shape shape = (particle_shape)0;
     Vector2 velocity;
     Vector2 original_scale;
     f32 lifetime;
     f32 max_lifetime;
+    
+    u32 color = 0x34f132;
 };
 
 struct particle_emitter{
+    particle_shape shape = (particle_shape)0;
     b32 emitting;
-    u32 per_second;
+    f32 emitting_timer;
+    f32 per_second;
     u32 count_min = 10;
     u32 count_max = 50;
     f32 speed_min = 50;
@@ -67,7 +77,7 @@ struct particle_emitter{
     f32 lifetime_min = 0.5f;
     f32 lifetime_max = 2;
     
-    u32 color = 0x34f132;
+    u32 color = 0x341132;
 };
 
 struct Player{  
@@ -85,6 +95,7 @@ struct Player{
     
     f32 melee_cooldown_timer;
     particle_emitter shoot_emitter;
+    particle_emitter pole_ride_emitter;
 };
 
 enum TileType{
@@ -102,6 +113,7 @@ struct Tilemap{
 struct collision{
     Vector2 normal;  
     Vector2 *obstacle_velocity;
+    Vector2 obstacle_position;
     
     b32 collided;
     
@@ -153,8 +165,9 @@ void fill_level1_tilemap(Game *game);
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
 
+void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position);
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position);
-void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, u32 seed_multiplier);
+void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position);
 
 
 int level1[30][30] = {

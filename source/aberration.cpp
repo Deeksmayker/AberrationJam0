@@ -57,7 +57,7 @@ void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color)
 
 void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color){
     Vector2 vector_to_end = subtract({end_x, end_y}, {start_x, start_y});
-    int points_count = (int)magnitude(vector_to_end) * 3;
+    int points_count = ((int)magnitude(vector_to_end) + 1) * 4;
     
     for (int i = 0; i <= points_count; i++){
         f32 t = lerp((f32)0, (f32)1, (f32)i / (f32)points_count);
@@ -113,19 +113,38 @@ void InitGame(){
     
     global_game.tilemap = {};
     
-    particle_emitter *emitter = &global_game.player.shoot_emitter;
-    *emitter = {};
-    emitter->speed_min    = 40;
-    emitter->speed_max    = 150;
-    emitter->scale_min    = 0.15f;
-    emitter->scale_max    = 0.5f;
-    emitter->count_min    = 30;
-    emitter->count_max    = 80;
-    emitter->lifetime_min = 0.1f;
-    emitter->lifetime_max = 0.5f;
+    particle_emitter *shoot_emitter = &global_game.player.shoot_emitter;
+    *shoot_emitter = {};
+    shoot_emitter->speed_min    = 40;
+    shoot_emitter->speed_max    = 150;
+    shoot_emitter->scale_min    = 0.4f;
+    shoot_emitter->scale_max    = 1.5f;
+    shoot_emitter->count_min    = 30;
+    shoot_emitter->count_max    = 80;
+    shoot_emitter->lifetime_min = 0.1f;
+    shoot_emitter->lifetime_max = 0.5f;
+    shoot_emitter->shape = (particle_shape)0;
+    
+    
+    particle_emitter *pole_ride_emitter = &global_game.player.pole_ride_emitter;
+    *pole_ride_emitter = {};
+    pole_ride_emitter->speed_min    = 20;
+    pole_ride_emitter->speed_max    = 60;
+    pole_ride_emitter->scale_min    = 0.1f;
+    pole_ride_emitter->scale_max    = 0.2f;
+    pole_ride_emitter->lifetime_min = 0.3f;
+    pole_ride_emitter->lifetime_max = 0.7f;
+    pole_ride_emitter->per_second = 80;
+    pole_ride_emitter->color = 0xffff22;
+    pole_ride_emitter->spread = 1;
+    pole_ride_emitter->shape = (particle_shape)1;
+
+    
     
     //fill_level1_tilemap(&global_game);
 }
+
+global_variable f32 previous_delta = 0;
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     rand_seed = (u32)(global_game.delta * 100000000000.0f);
@@ -143,10 +162,27 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y};
 
     global_game.input = input;
-    global_game.delta = delta;
     global_game.time += delta;
     
+    f32 frame_time = 0.0166666f;
+    
+    delta += previous_delta;
+    previous_delta = 0;
+    
+    if (delta > frame_time){
+        global_game.delta = frame_time;
+        while(delta > frame_time){
+            update(&global_game);
+            delta -= frame_time;
+        }
+        
+        previous_delta = delta;
+    } 
+    
+    global_game.delta = delta;
     update(&global_game);
+    
+    
     render(&global_game, Buffer);
 }
 
@@ -266,6 +302,8 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                     player->velocity.y += 100 * game->delta;
                     player->velocity.x *= 1.0f - game->delta * 1;
                     player->riding_pole = 1;
+                    
+                    update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position);
                 }
             } break;
         }
@@ -342,17 +380,18 @@ collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity)
             tile_entity.position = {(f32)x * game->tilemap.block_scale, ((f32)game->tilemap.rows - y - 1) * game->tilemap.block_scale}; 
             tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
             
-            
             if (check_box_collision(&vertical_future_entity, &tile_entity)){
                 collisions_data[collided_count].normal = {0, -normalize(velocity.y)};
                 collisions_data[collided_count].tile_type = (TileType)level1[y][x];
                 collisions_data[collided_count].collided = 1;
+                collisions_data[collided_count].obstacle_position = tile_entity.position;
                 collided_count++;
             }
             if (velocity.x != 0 && check_box_collision(&horizontal_future_entity, &tile_entity)){
                 collisions_data[collided_count].normal = {-normalize(velocity.x), 0};
                 collisions_data[collided_count].tile_type = (TileType)level1[y][x];
                 collisions_data[collided_count].collided = 1;
+                collisions_data[collided_count].obstacle_position = tile_entity.position;
                 collided_count++;
             }
         }
@@ -448,9 +487,28 @@ void render(Game *game, screen_buffer *Buffer){
     
     draw_entities(game, Buffer);
 
-    draw_rect(Buffer, game->player.entity.position, game->player.entity.scale, 0xff3423);
+    Player *player = &game->player;
+    draw_rect(Buffer, player->entity.position, player->entity.scale, 0xff3423);
     //Vector2 added = add(game->player.entity.position, {10, 10});
-    draw_line(Buffer, game->player.entity.position, game->input.mouse_world_position, 0.2f, 0xff5533);
+    
+    Vector2 player_to_mouse = subtract(game->input.mouse_world_position, player->entity.position);
+    normalize(&player_to_mouse);
+    
+    //Draw Rifle
+    draw_line(Buffer,
+              subtract(player->entity.position, multiply(player_to_mouse, 0.2f)),
+              add(player->entity.position, multiply(player_to_mouse, 1.0f)),
+              1.7f, 0x555555);
+    draw_line(Buffer,
+              add(player->entity.position, multiply(player_to_mouse, 1.5f)),
+              add(player->entity.position, multiply(player_to_mouse, 2.5f)),
+              1.3f, 0x777777);
+    draw_line(Buffer,
+              add(player->entity.position, multiply(player_to_mouse, 3.0f)),
+              add(player->entity.position, multiply(player_to_mouse, 4.5f)),
+              0.7f, 0x999999);
+    
+    //draw_line(Buffer, game->player.entity.position, game->input.mouse_world_position, 0.2f, 0xff5533);
     
     //draw_rect(Buffer, game->input.mouse_world_position.x, game->input.mouse_world_position.y, 3, 3, 0xbc32fd);
     //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * unit_size, player.scale.y * unit_size, 0xff5533);
@@ -482,8 +540,13 @@ void draw_entities(Game *game, screen_buffer *Buffer){
     //particles
     for (int i = 0; i < game->particles.count; i++){
         Particle *particle = ((Particle *)array_get(&game->particles, i));
-        Vector2 end_position = add(particle->entity.position, multiply(particle->velocity, 0.05f));
-        draw_line(Buffer, particle->entity.position, end_position, particle->entity.scale.x, 0x445663);
+        
+        if (particle->shape == (particle_shape)0){
+            draw_rect(Buffer, particle->entity.position, particle->entity.scale, particle->color);
+        } else if (particle->shape == (particle_shape)1){
+            Vector2 end_position = add(particle->entity.position, multiply(particle->velocity, 0.1f));
+            draw_line(Buffer, particle->entity.position, end_position, particle->entity.scale.x, particle->color);
+        }
     }
 }
 
@@ -493,22 +556,34 @@ void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vec
     int count = rnd((int)emitter.count_min, (int)emitter.count_max);
     
     for (int i = 0; i < count; i++){
-        shoot_particle(game, emitter, direction, start_position, i+1);
+        shoot_particle(game, emitter, direction, start_position);
     }
 }
 
-void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, u32 seed_multiplier){
+void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position){
+    emitter->emitting_timer += game->delta;
+    f32 emit_delay = 1.0f / emitter->per_second;
+    while (emitter->emitting_timer >= emit_delay){
+        emitter->emitting_timer -= emit_delay;
+        shoot_particle(game, *emitter, direction, start_position);
+    }
+}
+
+
+void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position){
     rnd_state = (rnd_state + 1) * 3;
     Particle particle = {};
     particle.entity = {};
     particle.entity.position = start_position;
+    
+    particle.shape = emitter.shape;
     
     f32 scale = rnd(emitter.scale_min, emitter.scale_max);
     particle.entity.scale = {scale, scale};
     particle.original_scale = {scale, scale};
     
     rnd_state = (rnd_state + 1) * 3;
-    f32 x_direction = rnd(direction.x - 0.2f, direction.x + 0.2f);
+    f32 x_direction = rnd(direction.x - emitter.spread, direction.x + emitter.spread);
     rnd_state = (rnd_state + 1) * 3;
     f32 y_direction = rnd(direction.y - 0.2f, direction.y + 0.2f);
     Vector2 randomized_direction = {x_direction, y_direction};
@@ -519,6 +594,8 @@ void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vec
     rnd_state = (rnd_state + 1) * 3;
     f32 lifetime = rnd(emitter.lifetime_min, emitter.lifetime_max);
     particle.max_lifetime = lifetime;
+    
+    particle.color = emitter.color;
     
     particle.velocity = multiply(randomized_direction, randomized_speed);
     
