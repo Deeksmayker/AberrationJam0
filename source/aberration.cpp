@@ -18,9 +18,44 @@ RenderFunnyGradient(screen_buffer *Buffer, int XOffset, int YOffset){
     }
 }
 
+Game global_game;
+
+void loop_world_position(Game *game, Vector2 *position){
+    if (position->y < game->bottom_right_world_position.y){
+        position->y += game->top_left_world_position.y;
+    }
+    
+    if (position->y >= game->top_left_world_position.y){
+        position->y -= game->top_left_world_position.y;
+    }
+    
+    if (position->x < game->top_left_world_position.x){
+        position->x += game->bottom_right_world_position.x;
+    }
+    
+    if (position->x >= game->bottom_right_world_position.x){
+        position->x -= game->bottom_right_world_position.x;
+    }
+}
+
+
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color){
+    f32 screen_world_height = (f32)Buffer->Height / unit_size;
+    if (global_game.top_left_world_position.y - camera_position.y < screen_world_height){
+        
+    }
+
     xPosition -= camera_position.x;
     yPosition -= camera_position.y;
+    
+    if (yPosition < 0 && abs(yPosition + screen_world_height) < screen_world_height){
+//        yPosition = abs(yPosition) - screen_world_height;
+    }
+    
+    Vector2 world_position = {xPosition, yPosition};
+    loop_world_position(&global_game, &world_position);
+    xPosition = world_position.x;
+    yPosition = world_position.y;
 
     width  *= unit_size;
     height *= unit_size;
@@ -86,11 +121,11 @@ void fill_background(screen_buffer *Buffer, u32 color){
     }
 }
 
-Game global_game;
 
 void InitGame(){
     global_game = {};
     global_game.entities = array_init(sizeof(Entity));
+    
     
     global_game.player = {};
     global_game.player.entity = {};
@@ -99,7 +134,7 @@ void InitGame(){
     
     global_game.particles = array_init(sizeof(Particle), 100000);
     
-    global_game.line_entities = array_init(sizeof(line_entity), 500);
+    global_game.line_entities = array_init(sizeof(line_entity), 100000);
     
     /*
     global_game.walls = array_init(sizeof(Entity));
@@ -129,6 +164,8 @@ void InitGame(){
     shoot_emitter->lifetime_max = 0.5f;
     shoot_emitter->shape = (particle_shape)0;
     
+    global_game.top_left_world_position     = {0, (f32)global_game.tilemap.rows * global_game.tilemap.block_scale};
+    global_game.bottom_right_world_position = {(f32)global_game.tilemap.columns * global_game.tilemap.block_scale, 0};
     
     particle_emitter *pole_ride_emitter = &global_game.player.pole_ride_emitter;
     *pole_ride_emitter = {};
@@ -148,10 +185,11 @@ void InitGame(){
     //fill_level1_tilemap(&global_game);
 }
 
+
 global_variable f32 previous_delta = 0;
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
-    rand_seed = (u32)(global_game.delta * 100000000000.0f);
+    rand_seed = (u32)(global_game.delta * 10000000000.0f);
     rnd_state = rand_seed;
     
     //unit_size = lerp(unit_size, 0.1f, delta * 0.5f);
@@ -163,7 +201,17 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
                                  ((f32)Buffer->ScreenHeight / (f32)Buffer->Height)) / 
                                  unit_size;
                                  
-    input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y};
+    input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y + camera_position.y};
+    
+    f32 screen_world_height = (f32)Buffer->Height / unit_size;
+    if(global_game.top_left_world_position.y - camera_position.y < screen_world_height
+                            && global_game.player.entity.position.y < screen_world_height){
+        global_game.camera_player_position.y = global_game.player.entity.position.y + global_game.top_left_world_position.y; 
+        global_game.camera_player_position.x = global_game.player.entity.position.x;
+    } else{
+        global_game.camera_player_position = global_game.player.entity.position;
+    }
+
 
     global_game.input = input;
     global_game.time += delta;
@@ -187,6 +235,11 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     update(&global_game);
     
     
+    f32 camera_target_y = global_game.camera_player_position.y - ((f32)Buffer->Height / (f32)unit_size) * 0.5f;
+    camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 5);
+    loop_world_position(&global_game, &camera_position);
+
+    
     render(&global_game, Buffer);
 }
 
@@ -197,6 +250,8 @@ void update(Game *game){
 
     game->player.entity.position.x += game->player.velocity.x * game->delta;
     game->player.entity.position.y += game->player.velocity.y * game->delta;
+    
+    loop_world_position(game, &game->player.entity.position);
     
     //camera_position = game->player.entity.position;
 }
@@ -261,7 +316,7 @@ void update_player(Game *game){
     if (game->input.mouse_left_key && player->range_cooldown_timer <= 0){
         player->range_cooldown_timer = 0.5f;
         
-        Vector2 direction = subtract(game->input.mouse_world_position, player->entity.position);
+        Vector2 direction = subtract(game->input.mouse_world_position, game->camera_player_position);
         normalize(&direction);
         
         Vector2 end_point = add(player->entity.position, multiply(direction, 400));
@@ -306,6 +361,8 @@ void update_player(Game *game){
             }
         }
     }
+    
+    clamp(&player->velocity.y, -150, 200);
     
     check_player_collisions(game);
     //printf("%d\n", (int)game->player.velocity.x);
@@ -543,6 +600,7 @@ line_hits check_line_collision(Game *game, Line line){
         Entity line_point_entity = {};
         line_point_entity.position = {point_x, point_y};
         line_point_entity.scale = {line.width, line.width};
+        loop_world_position(game, &line_point_entity.position);
                 
         for (int y = 0; y < game->tilemap.rows && !hit_anything; y++){
             for (int x = 0; x < game->tilemap.columns && !hit_anything; x++){
@@ -589,7 +647,7 @@ void render(Game *game, screen_buffer *Buffer){
     draw_rect(Buffer, player->entity.position, player->entity.scale, 0xff3423);
     //Vector2 added = add(game->player.entity.position, {10, 10});
     
-    Vector2 player_to_mouse = subtract(game->input.mouse_world_position, player->entity.position);
+    Vector2 player_to_mouse = subtract(game->input.mouse_world_position, game->camera_player_position);
     normalize(&player_to_mouse);
     
     //Draw Rifle

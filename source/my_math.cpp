@@ -30,6 +30,14 @@ i32 clamp(i32 value, i32 min, i32 max){
     return value;
 }
 
+void clamp(f32 *value, f32 min, f32 max){
+    if (*value <= min){
+        *value = min;
+    } else if (*value >= max){
+        *value = max;
+    }
+}
+
 Vector2 add(Vector2 first, Vector2 second){
     return {first.x + second.x, first.y + second.y};
 }
