@@ -152,7 +152,7 @@ void InitGame(){
     
     global_game.tilemap = {};
     
-    particle_emitter *shoot_emitter = &global_game.player.shoot_emitter;
+    particle_emitter *shoot_emitter = &global_game.player.shoot.emitter;
     *shoot_emitter = {};
     shoot_emitter->speed_min    = 40;
     shoot_emitter->speed_max    = 150;
@@ -305,32 +305,55 @@ void update_player(Game *game){
     if (game->input.mouse_right_key && player->melee_cooldown_timer <= 0){
         player->melee_cooldown_timer = 0.5f;
         Vector2 direction = subtract(game->input.mouse_world_position, player->entity.position);
-        emit_particles(game, player->shoot_emitter, direction, player->entity.position, 1.0f);
-    }
-    
-    if (player->range_cooldown_timer > 0){
-        player->range_cooldown_timer -= game->delta;
+        emit_particles(game, player->shoot.emitter, direction, player->entity.position, 1.0f);
     }
     
     //shoot logic
-    if (game->input.mouse_left_key && player->range_cooldown_timer <= 0){
-        player->range_cooldown_timer = 0.5f;
+    Player::shooter *shoot = &player->shoot;
+    Vector2 player_to_mouse = subtract(game->input.mouse_world_position, game->camera_player_position);
+    normalize(&player_to_mouse);
+
+    
+    if (shoot->cooldown_timer > 0){
+        shoot->cooldown_timer -= game->delta;
+    }
+    
+    //charging
+    if (game->input.mouse_left_key){
+        shoot->holding = 1;
+        shoot->holding_timer += game->delta;
         
-        Vector2 direction = subtract(game->input.mouse_world_position, game->camera_player_position);
-        normalize(&direction);
+        if (shoot->holding_timer >= shoot->perfect_hold_time && !shoot->perfect_charged){
+            shoot->perfect_charged = 1;
+            
+            emit_particles(game, shoot->emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
+            
+        }
+    } else if (shoot->holding && player->shoot.cooldown_timer <= 0){
+        shoot->holding = 0;
+        shoot->perfect_charged = 0;
         
-        Vector2 end_point = add(player->entity.position, multiply(direction, 400));
+        b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
+                         && shoot->holding_timer <= (shoot->perfect_hold_time + shoot->perfect_buffer);
+                         
+        player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
+        
+        shoot->holding_timer = 0;
+    
+        f32 shoot_length = perfect_shoot ? 400 : 40;
+        
+        Vector2 end_point = add(player->entity.position, multiply(player_to_mouse, shoot_length));
         Line line = {};
         line.start_position = player->entity.position;
         line.end_position   = end_point;
-        line.width = 0.5f;
+        line.width = perfect_shoot ? 1 : 0.5f;
         
         //shoot line render
         line_entity visual_line = {};
         visual_line.line = line;
-        visual_line.line.width = 0.8f;
-        visual_line.color = 0xccaa44;
-        visual_line.max_lifetime = 0.3f;
+        visual_line.line.width = perfect_shoot ? 2.0f : 1.0f;
+        visual_line.color = perfect_shoot ? 0xbf212f : 0xf9a73e;
+        visual_line.max_lifetime = perfect_shoot ? 0.4f : 0.2f;
         
         array_add(&game->line_entities, &visual_line);
         
@@ -339,10 +362,10 @@ void update_player(Game *game){
         
         for (int i = 0; i < collision_count; i++){
             if (hits.enter_count > i){
-                emit_particles(game, player->shoot_emitter, multiply(direction, -1), hits.enter_positions[i], 0.5f);
+                emit_particles(game, player->shoot.emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
             }
             if (hits.exit_count > i){
-                emit_particles(game, player->shoot_emitter, direction, hits.exit_positions[i], 1.0f);
+                emit_particles(game, player->shoot.emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
             }
             
             if (hits.enter_count > i && hits.exit_count > i){
@@ -651,17 +674,46 @@ void render(Game *game, screen_buffer *Buffer){
     normalize(&player_to_mouse);
     
     //Draw Rifle
+    local_persist f32 length_multiplier = 1.0f; 
+    Player::shooter *shoot = &player->shoot;
+    if (shoot->holding){
+        f32 perfect_length_multiplier = 2.0f;
+        f32 max_length_multiplier = 2.2f;
+        
+        if (shoot->holding_timer <= shoot->perfect_hold_time){
+            f32 t = shoot->holding_timer / shoot->perfect_hold_time;
+            length_multiplier = lerp(1.0f, perfect_length_multiplier, t * t);
+        } else if (shoot->holding_timer <= shoot->perfect_hold_time + shoot->perfect_buffer){
+            f32 t = (shoot->holding_timer - shoot->perfect_hold_time) / shoot->perfect_buffer;
+            length_multiplier = lerp(perfect_length_multiplier, max_length_multiplier, t);
+        } else{
+            length_multiplier = lerp(length_multiplier, 1.0f, game->delta * 4.0f);
+        }
+    } else{
+        length_multiplier = lerp(length_multiplier, 1.0f, game->delta * 4.0f);
+    }
+    
+    f32 base_length_multiplier   = 1.0f;
+    f32 middle_length_multiplier = 1.0f;
+    f32 end_length_multiplier    = 1.0f;
+
+    if (length_multiplier > 1.0f){
+        base_length_multiplier   = length_multiplier * 1.5f;;
+        middle_length_multiplier = length_multiplier * 1.5f;;
+        end_length_multiplier    = length_multiplier * 1.5f;;
+    }
+    
     draw_line(Buffer,
               subtract(player->entity.position, multiply(player_to_mouse, 0.2f)),
-              add(player->entity.position, multiply(player_to_mouse, 1.0f)),
+              add(player->entity.position, multiply(player_to_mouse, 1.0f * base_length_multiplier)),
               1.7f, 0x555555);
     draw_line(Buffer,
-              add(player->entity.position, multiply(player_to_mouse, 1.5f)),
-              add(player->entity.position, multiply(player_to_mouse, 2.5f)),
+              add(player->entity.position, multiply(player_to_mouse, 1.5f * length_multiplier)),
+              add(player->entity.position, multiply(player_to_mouse, 2.5f * middle_length_multiplier)),
               1.3f, 0x777777);
     draw_line(Buffer,
-              add(player->entity.position, multiply(player_to_mouse, 3.0f)),
-              add(player->entity.position, multiply(player_to_mouse, 4.5f)),
+              add(player->entity.position, multiply(player_to_mouse, 3.0f * length_multiplier)),
+              add(player->entity.position, multiply(player_to_mouse, 4.5f * end_length_multiplier)),
               0.7f, 0x999999);
     
     //draw_line(Buffer, game->player.entity.position, game->input.mouse_world_position, 0.2f, 0xff5533);
@@ -717,11 +769,11 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         }
         
         if (line->max_lifetime > 0){
-            f32 time_to_max = line->max_lifetime * 0.6f;
+            f32 time_to_max = line->max_lifetime * 0.4f;
             
             if (line->lifetime <= time_to_max){
                 f32 t = line->lifetime / time_to_max;
-                line->visual_width = lerp(0.0f, line->line.width, EaseOutElastic(t));
+                line->visual_width = lerp(0.0f, line->line.width, EaseOutQuint(t));
             } else{
                 f32 t = (line->lifetime - time_to_max) / (line->max_lifetime - time_to_max);
                 line->visual_width = lerp(line->line.width, 0.0f, EaseInCirc(t));

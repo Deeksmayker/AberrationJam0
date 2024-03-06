@@ -30,6 +30,18 @@ i32 clamp(i32 value, i32 min, i32 max){
     return value;
 }
 
+f32 clamp(f32 value, f32 min, f32 max){
+    if (value <= min){
+        return min;
+    }
+    
+    if (value >= max){
+        return max;
+    }
+    
+    return value;
+}
+
 void clamp(f32 *value, f32 min, f32 max){
     if (*value <= min){
         *value = min;
