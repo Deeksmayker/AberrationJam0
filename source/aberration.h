@@ -146,6 +146,17 @@ struct line_entity{
     f32 visual_end_width;
 };
 
+struct fly_enemy_projectile{
+    Entity entity;
+    line_entity line_render;  
+    f32 target_speed;
+    f32 time_for_max_speed;
+    f32 lifetime;
+    Vector2 velocity;
+    Vector2 direction;
+};
+
+
 struct fly_enemy{
     Entity entity;  
     f32 hp = 10.0f;
@@ -208,6 +219,7 @@ struct Game{
     Array particles;
     Array line_entities;
     Array fly_enemies;
+    Array fly_enemy_projectiles;
     Player player;
     Tilemap tilemap;
 };
@@ -218,6 +230,8 @@ void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f
 void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color);
 void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color);
 void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 width, u32 color);
+void draw_line(screen_buffer *Buffer, Line line, u32 color);
+void draw_line(screen_buffer *Buffer, line_entity line_e); 
 
 void fill_background(screen_buffer *Buffer, u32 color);
 
@@ -226,6 +240,8 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer);
 void update(Game *game);
 void update_player(Game *game);
 void update_fly_enemies(Game *game);
+void update_fly_enemy_projectiles(Game *game);
+void spawn_fly_enemy_projectile(Game *game, Vector2 direction, Vector2 start_position);
 void update_particles(Game *game);
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration);
 void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction);

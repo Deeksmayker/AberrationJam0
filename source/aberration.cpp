@@ -112,6 +112,12 @@ void draw_line(screen_buffer *Buffer, Line line, u32 color){
     draw_line(Buffer, line.start_position.x, line.start_position.y, line.end_position.x, line.end_position.y, line.start_width, line.end_width, color);
 }
 
+void draw_line(screen_buffer *Buffer, line_entity line_e){
+    draw_line(Buffer, line_e.line.start_position, line_e.line.end_position, line_e.visual_start_width, line_e.visual_end_width, line_e.color);
+    
+}
+
+
 
 void fill_background(screen_buffer *Buffer, u32 color){
     u8 *ROW = (u8 *) Buffer->Memory;
@@ -139,6 +145,7 @@ void InitGame(){
     global_game.line_entities = array_init(sizeof(line_entity), 100000);
     
     global_game.fly_enemies = array_init(sizeof(fly_enemy), 100000);
+    global_game.fly_enemy_projectiles = array_init(sizeof(fly_enemy_projectile), 100000);
     
     add_fly_enemy(&global_game, {30, 35});
     
@@ -257,6 +264,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
 
 void update(Game *game){
     update_fly_enemies(game);
+    update_fly_enemy_projectiles(game);
     update_player(game);
     update_particles(game);
     debug_update(game);
@@ -497,10 +505,75 @@ void update_fly_enemies(Game *game){
                 fly->circling_time = 0;
                 fly->circling = 0;
                 fly->strafing = 1;
+                
+                spawn_fly_enemy_projectile(game, direction_to_player, fly->entity.position);
             }
         }
     }
 }
+
+void update_fly_enemy_projectiles(Game *game){
+    for (int i = 0; i < game->fly_enemy_projectiles.count; i++){
+        fly_enemy_projectile *projectile = (fly_enemy_projectile *)array_get(&game->fly_enemy_projectiles, i);
+        
+        projectile->lifetime += game->delta;
+        
+        if (projectile->lifetime > 10){
+            array_remove(&game->fly_enemy_projectiles, i);
+            return;
+        }
+        
+        Vector2 start_velocity = multiply(projectile->direction, 10.0f);
+        Vector2 end_velocity = multiply(projectile->direction, projectile->target_speed);
+        
+        f32 speed_progress = projectile->lifetime / projectile->time_for_max_speed;
+        clamp(&speed_progress, 0, 1);
+        projectile->velocity = lerp(start_velocity, end_velocity, speed_progress);
+        
+        add(&projectile->entity.position, multiply(projectile->velocity, game->delta));
+        loop_world_position(game, &projectile->entity.position);
+        
+        if (check_box_collision(&projectile->entity, &game->player.entity)){
+            //projectile hit
+            game->player.velocity.y += 40;
+            
+            array_remove(&game->fly_enemy_projectiles, i);
+            return;
+        }
+        
+        projectile->line_render.line.start_position = projectile->entity.position;
+        Vector2 line_end_position = add(projectile->entity.position, multiply(projectile->direction, lerp(1.0f, 6.0f, speed_progress * speed_progress)));
+        projectile->line_render.line.end_position = line_end_position;
+        
+        projectile->line_render.visual_start_width = lerp(4.0f, 2.0f, speed_progress * speed_progress);
+        projectile->line_render.visual_end_width = lerp(2.5f, 1.0f, speed_progress * speed_progress);
+    }
+}
+
+void spawn_fly_enemy_projectile(Game *game, Vector2 direction, Vector2 start_position){
+    fly_enemy_projectile projectile = {};
+    projectile.entity = {};
+    projectile.line_render = {};
+    
+    projectile.entity.position = start_position;
+    projectile.entity.scale = {2, 2};
+    
+    projectile.line_render.line = {};
+    projectile.line_render.line.start_width = 2.0f;
+    projectile.line_render.line.end_width = 1.7f;
+    projectile.line_render.color = 0xff6677;
+    
+    projectile.line_render.visual_start_width = 3.5f;
+    projectile.line_render.visual_end_width = 2.0f;
+    
+    projectile.direction = direction;
+    projectile.target_speed = 140;
+    projectile.time_for_max_speed = 3.0f;
+    
+    
+    array_add(&game->fly_enemy_projectiles, &projectile);
+}
+
 
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration){
     if (direction == 0) return;
@@ -958,6 +1031,14 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             draw_line(Buffer, start_position, end_position, bullet_hole->visual_start_width, bullet_hole->visual_end_width, bullet_hole->color);
         }
     }
+    
+    //draw fly enemy projectiles
+    for  (int i = 0; i < game->fly_enemy_projectiles.count; i++){ 
+        fly_enemy_projectile *projectile = (fly_enemy_projectile *)array_get(&game->fly_enemy_projectiles, i);
+        
+        draw_line(Buffer, projectile->line_render);
+    }
+
 }
 
 void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){

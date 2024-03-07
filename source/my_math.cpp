@@ -72,6 +72,11 @@ Vector2 multiply(Vector2 vector, f32 value){
     return {vector.x * value, vector.y * value};
 }
 
+void multiply(Vector2 *vector, f32 value){
+    vector->x *= value;
+    vector->y *= value;
+}
+
 Vector2 multiply(Vector2 first, Vector2 second){
     return {first.x * second.x, first.y * second.y};
 }
