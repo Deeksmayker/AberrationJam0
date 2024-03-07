@@ -195,6 +195,7 @@ u32 rnd(u32 state)
 
 u32 rnd()
 {
+    rnd_state = (1 + rnd_state) * 5;
 	return (u64)rnd_state * 48271 % 0x7fffffff;
 }
 
@@ -231,4 +232,8 @@ float EaseOutElastic(float x){
 
 f32 EaseInCirc(f32 x){
     return 1 - sqrt(1 - pow(x, 2));
+}
+
+f32 EaseInQuint(f32 x){
+    return x * x * x * x * x;
 }

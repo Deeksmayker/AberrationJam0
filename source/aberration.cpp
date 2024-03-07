@@ -448,6 +448,43 @@ void update_fly_enemies(Game *game){
         Vector2 vector_to_player = subtract(game->player.entity.position, fly->entity.position);
         Vector2 direction_to_player = normalized(vector_to_player);
         f32 distance_to_player = magnitude(vector_to_player);
+        
+        if (fly->charging){
+            fly->charge_timer += game->delta;
+            
+            f32 charge_progress = fly->charge_timer / fly->charge_duration;
+            clamp(&charge_progress, 0.0f, 1.0f);
+            
+            line_entity charge_line = {};
+            charge_line.line = {};
+            charge_line.line.start_position = fly->entity.position;
+            
+            if (charge_progress < 0.8f){
+                fly->charge_end_position = add(fly->entity.position, multiply(direction_to_player, distance_to_player * 1.3f));
+            }
+            
+            charge_line.line.end_position = fly->charge_end_position;
+            f32 width = lerp(0.0f, 4.0f, EaseInCirc(charge_progress));
+            charge_line.line.start_width = width;
+            charge_line.line.end_width = width;
+            
+            charge_line.visual_start_width = width;
+            charge_line.visual_end_width = width;
+            charge_line.die_after_drawing = 1;
+            charge_line.color = lerp_color(0x2244aa, 0xaa2244, EaseInCirc(charge_progress));
+            
+            array_add(&game->line_entities, &charge_line);
+            
+            if (charge_progress >= 1){
+                fly->charge_timer = 0;
+                fly->charging = 0;
+                fly->strafing = 1;
+                
+                fly->strafe_start_position = fly->entity.position;
+                fly->strafe_target_position = fly->charge_end_position;
+                fly->picked_strafe_position = 1;
+            }
+        }
 
         if (fly->strafing && !fly->picked_strafe_position){
             if (distance_to_player < 20){
@@ -504,10 +541,22 @@ void update_fly_enemies(Game *game){
             if (fly->circling_time > 2){
                 fly->circling_time = 0;
                 fly->circling = 0;
-                fly->strafing = 1;
                 
-                spawn_fly_enemy_projectile(game, direction_to_player, fly->entity.position);
+                b32 will_shoot = rnd() % 256 < 196;
+                
+                if (will_shoot){
+                    fly->strafing = 1;
+                    
+                    spawn_fly_enemy_projectile(game, direction_to_player, fly->entity.position);
+                } else{
+                    fly->charging = 1;
+                }
             }
+        }
+        
+        if (check_box_collision(&fly->entity, &game->player.entity)){
+            //Enemy hit player
+            game->player.velocity.y += 60;
         }
     }
 }
@@ -1014,6 +1063,10 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         }
         
         draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_start_width, line->visual_end_width, line->color);
+        
+        if (line->die_after_drawing){
+            array_remove(&game->line_entities, i);
+        }
     }
     
     //draw enemies

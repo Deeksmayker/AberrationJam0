@@ -144,6 +144,7 @@ struct line_entity{
     f32 max_lifetime;
     f32 visual_start_width;
     f32 visual_end_width;
+    b32 die_after_drawing;
 };
 
 struct fly_enemy_projectile{
@@ -161,6 +162,11 @@ struct fly_enemy{
     Entity entity;  
     f32 hp = 10.0f;
     
+    b32 charging;
+    f32 charge_duration = 2;
+    f32 charge_timer;
+    Vector2 charge_end_position;
+    
     b32 strafing = 1;
     b32 picked_strafe_position;
     f32 strafe_duration = 2.0f;
@@ -168,7 +174,7 @@ struct fly_enemy{
     f32 strafe_t;
     Vector2 strafe_start_position;
     Vector2 strafe_target_position;
-    i32 max_strafe_count = 4;
+    i32 max_strafe_count = 3;
     i32 strafe_count;
     
     b32 circling;
