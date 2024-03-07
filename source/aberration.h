@@ -144,12 +144,24 @@ struct line_entity{
     f32 visual_width;
 };
 
+struct fly_enemy{
+    Entity entity;  
+    f32 hp = 10.0f;
+    Array lines;
+    
+    particle_emitter hit_emitter;
+};
+
+
 struct line_hits{
     int enter_count;  
     int exit_count;
     
     Vector2 *enter_positions;
     Vector2 *exit_positions;
+    //1 - tile, 2 - enemy
+    i32 *hit_types;
+    fly_enemy **enemy_hits;
 };
 
 struct collision{
@@ -162,13 +174,6 @@ struct collision{
     union{
         TileType tile_type;  
     };
-};
-
-struct fly_enemy{
-    Entity entity;  
-    f32 hp = 10.0f;
-    
-    particle_emitter hit_emitter;
 };
 
 struct Game{
@@ -205,6 +210,7 @@ void update_particles(Game *game);
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration);
 void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction);
 void check_player_collisions(Game *game);
+fly_enemy *check_enemy_collision(Game *game, Entity entity);
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data);
 void calculate_particle_tilemap_collisions(Game *game, Particle *particle, collision *collisions_data);
 collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity);
@@ -213,9 +219,9 @@ b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);
 b32 check_box_collision(Entity *rect1, Entity *rect2);
 line_hits check_line_collision(Game *game, Line line);
 
-void debug_update(Game *game);
+void add_fly_enemy(Game *game, Vector2 position);
 
-void fill_level1_tilemap(Game *game);
+void debug_update(Game *game);
 
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);

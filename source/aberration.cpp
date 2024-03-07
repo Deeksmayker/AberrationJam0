@@ -137,11 +137,7 @@ void InitGame(){
     
     global_game.fly_enemies = array_init(sizeof(fly_enemy), 100000);
     
-    fly_enemy enemy1 = {};
-    enemy1.entity.position = {30, 35};
-    enemy1.entity.scale = {3, 4};
-    
-    array_add(&global_game.fly_enemies, &enemy1);
+    add_fly_enemy(&global_game, {30, 35});
     
     /*
     global_game.walls = array_init(sizeof(Entity));
@@ -372,6 +368,7 @@ void update_player(Game *game){
         
         array_add(&game->line_entities, &visual_line);
         
+        //@TODO: Free this hits
         line_hits hits = check_line_collision(game, line);
         int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
         
@@ -388,14 +385,21 @@ void update_player(Game *game){
                 Line wall_line = {};
                 wall_line.start_position = hits.enter_positions[i];
                 wall_line.end_position   = hits.exit_positions[i];
-                wall_line.width = 0.1f;
+                wall_line.width = 0.01f;
                 
                 line_entity wall_visual_line = {};
                 wall_visual_line.line = wall_line;
-                wall_visual_line.color = 0xcccccc;
                 wall_visual_line.max_lifetime = 0;
                 
-                array_add(&game->line_entities, &wall_visual_line);
+                if (hits.hit_types[i] == 1){
+                    wall_visual_line.color = 0xffffff;
+                    array_add(&game->line_entities, &wall_visual_line);
+                } else if (hits.hit_types[i] == 2){
+                    wall_visual_line.color = 0xcc3333;
+                    subtract(&wall_visual_line.line.start_position, hits.enemy_hits[i]->entity.position);
+                    subtract(&wall_visual_line.line.end_position, hits.enemy_hits[i]->entity.position);
+                    array_add(&hits.enemy_hits[i]->lines, &wall_visual_line);
+                }
             }
         }
     } else{
@@ -426,14 +430,21 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
     velocity->x += friction_force;
 }
 
+void add_fly_enemy(Game *game, Vector2 position){
+    fly_enemy enemy = {};
+    enemy.entity.position = {30, 35};
+    enemy.entity.scale = {3, 4};
+    
+    enemy.lines = array_init(sizeof(line_entity), 100);
+    
+    array_add(&global_game.fly_enemies, &enemy);
+}
+
+
 void check_player_collisions(Game *game){
     game->player.grounded = 0;
     
     calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
-    
-
-    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {0, game->player.velocity.y}, game->player.entity));
-    //calculate_player_tilemap_collision(&game->player, check_tilemap_collisions(game, {game->player.velocity.x, 0}, game->player.entity));
 }
 
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){
@@ -557,6 +568,18 @@ collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity)
     return collisions_data;
 }
 
+fly_enemy *check_enemy_collision(Game *game, Entity entity){
+    for (int i = 0; i < game->fly_enemies.count; i++){
+        fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
+        
+        if (check_box_collision(&entity, &enemy->entity)){
+            return enemy;
+        }
+    }
+    
+    return 0;
+}
+
 collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity){
     Entity vertical_future_entity = entity;        
     vertical_future_entity.position = add(entity.position, {0, velocity.y * game->delta});
@@ -628,6 +651,8 @@ line_hits check_line_collision(Game *game, Line line){
     line_hits hits = {};
     hits.enter_positions = (Vector2 *)malloc(collisions_count * sizeof(Vector2));
     hits.exit_positions  = (Vector2 *)malloc(collisions_count * sizeof(Vector2));
+    hits.hit_types  = (i32 *)malloc(collisions_count * sizeof(i32));
+    hits.enemy_hits  = (fly_enemy **)malloc(collisions_count * sizeof(fly_enemy *));
     
     for (int i = 0; i <= points_count; i++){
         b32 hit_anything = 0;
@@ -641,7 +666,20 @@ line_hits check_line_collision(Game *game, Line line){
         line_point_entity.position = {point_x, point_y};
         line_point_entity.scale = {line.width, line.width};
         loop_world_position(game, &line_point_entity.position);
-                
+        
+        fly_enemy *enemy_collision = check_enemy_collision(game, line_point_entity);
+        if (enemy_collision){
+            if (!in_some_collider){
+                hits.enter_positions[hits.enter_count] = subtract(line_point_entity.position, multiply(direction, 0.2f));
+                hits.hit_types[hits.enter_count] = 2;
+                hits.enemy_hits[hits.enter_count] = enemy_collision;
+                hits.enter_count++;
+            }
+            
+            in_some_collider = 1;
+            hit_anything = 1;
+        }
+                        
         for (int y = 0; y < game->tilemap.rows && !hit_anything; y++){
             for (int x = 0; x < game->tilemap.columns && !hit_anything; x++){
                 if (hits.enter_count >= collisions_count || hits.exit_count >= collisions_count){
@@ -657,6 +695,8 @@ line_hits check_line_collision(Game *game, Line line){
                 if (check_box_collision(&line_point_entity, &tile_entity)){
                     if (!in_some_collider){
                         hits.enter_positions[hits.enter_count] = subtract(line_point_entity.position, multiply(direction, 0.2f));
+                        hits.hit_types[hits.enter_count] = 1;
+                        
                         hits.enter_count++;
                     }
                     
@@ -814,7 +854,16 @@ void draw_entities(Game *game, screen_buffer *Buffer){
     for  (int i = 0; i < game->fly_enemies.count; i++){ 
         fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
         
+        enemy->entity.position.x += game->delta;
+        
         draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0x3366aa);
+        
+        for (int j = 0; j < enemy->lines.count; j++){
+            line_entity *bullet_hole = (line_entity *)array_get(&enemy->lines, j);
+            Vector2 start_position = add(bullet_hole->line.start_position, enemy->entity.position);
+            Vector2 end_position = add(bullet_hole->line.end_position, enemy->entity.position);
+            draw_line(Buffer, start_position, end_position, bullet_hole->visual_width, bullet_hole->color);
+        }
     }
 }
 
