@@ -133,7 +133,8 @@ struct Tilemap{
 struct Line{
     Vector2 start_position;
     Vector2 end_position;
-    f32 width;
+    f32 start_width;
+    f32 end_width;
 };
 
 struct line_entity{
@@ -141,17 +142,35 @@ struct line_entity{
     u32 color;
     f32 lifetime;
     f32 max_lifetime;
-    f32 visual_width;
+    f32 visual_start_width;
+    f32 visual_end_width;
 };
 
 struct fly_enemy{
     Entity entity;  
     f32 hp = 10.0f;
+    
+    b32 strafing = 1;
+    b32 picked_strafe_position;
+    f32 strafe_duration = 2.0f;
+    f32 strafe_distance = 40;
+    f32 strafe_t;
+    Vector2 strafe_start_position;
+    Vector2 strafe_target_position;
+    i32 max_strafe_count = 4;
+    i32 strafe_count;
+    
+    b32 circling;
+    f32 circle_speed = 5;
+    f32 circle_radius = 15;
+    f32 circle_angle;
+    Vector2 circle_origin;
+    f32 circling_time;
+    
     Array lines;
     
     particle_emitter hit_emitter;
 };
-
 
 struct line_hits{
     int enter_count;  
@@ -206,6 +225,7 @@ void fill_background(screen_buffer *Buffer, u32 color);
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer);
 void update(Game *game);
 void update_player(Game *game);
+void update_fly_enemies(Game *game);
 void update_particles(Game *game);
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration);
 void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction);

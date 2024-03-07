@@ -41,9 +41,6 @@ void loop_world_position(Game *game, Vector2 *position){
 
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color){
     f32 screen_world_height = (f32)Buffer->Height / unit_size;
-    if (global_game.top_left_world_position.y - camera_position.y < screen_world_height){
-        
-    }
 
     xPosition -= camera_position.x;
     yPosition -= camera_position.y;
@@ -92,7 +89,7 @@ void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color)
 
 
 
-void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color){
+void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 start_width, f32 end_width, u32 color){
     Vector2 vector_to_end = subtract({end_x, end_y}, {start_x, start_y});
     int points_count = (((int)magnitude(vector_to_end) + 10) * 4);
     
@@ -102,11 +99,17 @@ void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 e
         f32 x = lerp(start_x, end_x, t);
         f32 y = lerp(start_y, end_y, t);
         
-        draw_rect(Buffer, x, y, width, width, color);
+        f32 block_width = lerp(start_width, end_width, t);
+        
+        draw_rect(Buffer, x, y, block_width, block_width, color);
     }
 }
-void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 width, u32 color){
-    draw_line(Buffer, start_position.x, start_position.y, end_position.x, end_position.y, width, color);
+void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 start_width, f32 end_width, u32 color){
+    draw_line(Buffer, start_position.x, start_position.y, end_position.x, end_position.y, start_width, end_width, color);
+}
+
+void draw_line(screen_buffer *Buffer, Line line, u32 color){
+    draw_line(Buffer, line.start_position.x, line.start_position.y, line.end_position.x, line.end_position.y, line.start_width, line.end_width, color);
 }
 
 
@@ -238,8 +241,14 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     update(&global_game);
     
     
+    f32 screen_center = (Buffer->ScreenHeight / unit_size) * 0.5f;
+    f32 additional_vertical_position = (input.mouse_screen_position.y / unit_size) - screen_center;
+    
     f32 camera_target_y = global_game.camera_player_position.y - ((f32)Buffer->Height / (f32)unit_size) * 0.5f;
-    camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 5);
+    
+    camera_target_y += additional_vertical_position * 0.3f;
+    
+    camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 10);
     loop_world_position(&global_game, &camera_position);
 
     
@@ -247,6 +256,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
 }
 
 void update(Game *game){
+    update_fly_enemies(game);
     update_player(game);
     update_particles(game);
     debug_update(game);
@@ -351,18 +361,28 @@ void update_player(Game *game){
         f32 shoot_length = perfect_shoot ? 600 : 40;
         
         //recoil
-        add(&player->velocity, multiply(multiply(player_to_mouse, -1), perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
+        Vector2 recoil_direction = multiply(player_to_mouse, -1);
+        
+        if (player->velocity.x * recoil_direction.x < 0){
+            player->velocity.x = 0;
+        }
+        if (player->velocity.y * recoil_direction.y < 0){
+            player->velocity.y = 0;
+        }
+        add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
         
         Vector2 end_point = add(player->entity.position, multiply(player_to_mouse, shoot_length));
         Line line = {};
         line.start_position = player->entity.position;
         line.end_position   = end_point;
-        line.width = perfect_shoot ? 1 : 0.5f;
+        line.start_width = perfect_shoot ? 2 : 0.5f;
+        line.end_width = line.start_width;
         
         //shoot line render
         line_entity visual_line = {};
         visual_line.line = line;
-        visual_line.line.width = perfect_shoot ? 2.0f : 1.0f;
+        visual_line.line.start_width = perfect_shoot ? 2.0f : 1.0f;
+        visual_line.line.end_width = 0.5f;
         visual_line.color = perfect_shoot ? 0xbf212f : 0xf9a73e;
         visual_line.max_lifetime = perfect_shoot ? 0.4f : 0.2f;
         
@@ -385,7 +405,8 @@ void update_player(Game *game){
                 Line wall_line = {};
                 wall_line.start_position = hits.enter_positions[i];
                 wall_line.end_position   = hits.exit_positions[i];
-                wall_line.width = 0.01f;
+                wall_line.start_width = 0.01f;
+                wall_line.end_width = 0.01f;
                 
                 line_entity wall_visual_line = {};
                 wall_visual_line.line = wall_line;
@@ -412,6 +433,75 @@ void update_player(Game *game){
     //printf("%d\n", (int)game->player.velocity.x);
 }
 
+void update_fly_enemies(Game *game){
+    for (int i = 0; i < game->fly_enemies.count; i++){
+        fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
+        
+        Vector2 vector_to_player = subtract(game->player.entity.position, fly->entity.position);
+        Vector2 direction_to_player = normalized(vector_to_player);
+        f32 distance_to_player = magnitude(vector_to_player);
+
+        if (fly->strafing && !fly->picked_strafe_position){
+            if (distance_to_player < 20){
+                fly->strafing = 0;
+                fly->circling = 1;
+            }
+            
+            if (fly->strafing){
+                Vector2 strafe_direction = 
+                        {fly->strafe_count & 1 ? -1.0f : 1.0f,
+                         normalize(direction_to_player.y) * 1};
+                normalize(&strafe_direction);
+            
+                fly->strafe_start_position = fly->entity.position;
+                fly->strafe_target_position = add(fly->entity.position, multiply(strafe_direction, fly->strafe_distance));
+                fly->picked_strafe_position = 1;
+            }
+        }
+
+        
+        if (fly->strafing){
+            fly->strafe_t += game->delta / fly->strafe_duration;
+            
+            fly->entity.position = lerp(fly->strafe_start_position, fly->strafe_target_position, EaseOutElastic(fly->strafe_t));
+            
+            if (fly->strafe_t >= 1){
+                fly->strafe_t = 0;
+                fly->picked_strafe_position = 0;
+                fly->strafe_count++;
+                
+                if (fly->strafe_count >= fly->max_strafe_count){
+                    fly->strafe_count = 0;
+                    fly->strafing = 0;
+                    fly->circling = 1;
+                }
+            }
+        }
+        
+        if (fly->circling){
+            if (fly->circling_time <= 0){
+                fly->circle_origin = fly->entity.position;
+            }
+        
+            fly->circling_time += game->delta;
+        
+            fly->circle_angle += game->delta * fly->circle_speed;
+            fly->entity.position.x = lerp(fly->entity.position.x,
+                                          fly->circle_origin.x + fly->circle_radius * cos(fly->circle_angle),
+                                          game->delta * 10);
+            fly->entity.position.y = lerp(fly->entity.position.y,
+                                          fly->circle_origin.y + fly->circle_radius * sin(fly->circle_angle),
+                                          game->delta * 10);
+                                          
+            if (fly->circling_time > 2){
+                fly->circling_time = 0;
+                fly->circling = 0;
+                fly->strafing = 1;
+            }
+        }
+    }
+}
+
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration){
     if (direction == 0) return;
     f32 new_speed = velocity->x + acceleration * direction * delta;
@@ -432,7 +522,7 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
 
 void add_fly_enemy(Game *game, Vector2 position){
     fly_enemy enemy = {};
-    enemy.entity.position = {30, 35};
+    enemy.entity.position = position;
     enemy.entity.scale = {3, 4};
     
     enemy.lines = array_init(sizeof(line_entity), 100);
@@ -664,7 +754,7 @@ line_hits check_line_collision(Game *game, Line line){
         
         Entity line_point_entity = {};
         line_point_entity.position = {point_x, point_y};
-        line_point_entity.scale = {line.width, line.width};
+        line_point_entity.scale = {line.start_width, line.start_width};
         loop_world_position(game, &line_point_entity.position);
         
         fly_enemy *enemy_collision = check_enemy_collision(game, line_point_entity);
@@ -771,15 +861,15 @@ void render(Game *game, screen_buffer *Buffer){
     draw_line(Buffer,
               subtract(player->entity.position, multiply(player_to_mouse, 0.2f)),
               add(player->entity.position, multiply(player_to_mouse, 1.0f * base_length_multiplier)),
-              1.7f, 0x555555);
+              1.7f, 1.7f, 0x555555);
     draw_line(Buffer,
               add(player->entity.position, multiply(player_to_mouse, 1.5f * length_multiplier)),
               add(player->entity.position, multiply(player_to_mouse, 2.5f * middle_length_multiplier)),
-              1.3f, 0x777777);
+              1.3f, 1.3f, 0x777777);
     draw_line(Buffer,
               add(player->entity.position, multiply(player_to_mouse, 3.0f * length_multiplier)),
               add(player->entity.position, multiply(player_to_mouse, 4.5f * end_length_multiplier)),
-              0.7f, 0x999999);
+              0.7f, 0.5f, 0x999999);
     
     //draw_line(Buffer, game->player.entity.position, game->input.mouse_world_position, 0.2f, 0xff5533);
     
@@ -818,7 +908,7 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             draw_rect(Buffer, particle->entity.position, particle->entity.scale, particle->color);
         } else if (particle->shape == (particle_shape)1){
             Vector2 end_position = add(particle->entity.position, multiply(particle->velocity, 0.1f));
-            draw_line(Buffer, particle->entity.position, end_position, particle->entity.scale.x, particle->color);
+            draw_line(Buffer, particle->entity.position, end_position, particle->entity.scale.x, particle->entity.scale.x, particle->color);
         }
     }
     
@@ -838,23 +928,26 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             
             if (line->lifetime <= time_to_max){
                 f32 t = line->lifetime / time_to_max;
-                line->visual_width = lerp(0.0f, line->line.width, EaseOutQuint(t));
+                line->visual_start_width = lerp(0.0f, line->line.start_width, EaseOutQuint(t));
+                line->visual_end_width = lerp(0.0f, line->line.end_width, EaseOutQuint(t));
             } else{
                 f32 t = (line->lifetime - time_to_max) / (line->max_lifetime - time_to_max);
-                line->visual_width = lerp(line->line.width, 0.0f, EaseInCirc(t));
+                line->visual_start_width = lerp(line->line.start_width, 0.0f, EaseInCirc(t));
+                line->visual_end_width = lerp(line->line.end_width, 0.0f, EaseInCirc(t));
             }
         } else{
-            line->visual_width = line->line.width;
+            line->visual_start_width = line->line.start_width;
+            line->visual_end_width = line->line.end_width;
         }
         
-        draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_width, line->color);
+        draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_start_width, line->visual_end_width, line->color);
     }
     
     //draw enemies
     for  (int i = 0; i < game->fly_enemies.count; i++){ 
         fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
         
-        enemy->entity.position.x += game->delta;
+        //enemy->entity.position.x += game->delta;
         
         draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0x3366aa);
         
@@ -862,7 +955,7 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             line_entity *bullet_hole = (line_entity *)array_get(&enemy->lines, j);
             Vector2 start_position = add(bullet_hole->line.start_position, enemy->entity.position);
             Vector2 end_position = add(bullet_hole->line.end_position, enemy->entity.position);
-            draw_line(Buffer, start_position, end_position, bullet_hole->visual_width, bullet_hole->color);
+            draw_line(Buffer, start_position, end_position, bullet_hole->visual_start_width, bullet_hole->visual_end_width, bullet_hole->color);
         }
     }
 }
