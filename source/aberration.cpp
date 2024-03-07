@@ -313,6 +313,9 @@ void update_player(Game *game){
     Vector2 player_to_mouse = subtract(game->input.mouse_world_position, game->camera_player_position);
     normalize(&player_to_mouse);
 
+    if (shoot->just_shoot){
+        shoot->just_shoot = 0;
+    }
     
     if (shoot->cooldown_timer > 0){
         shoot->cooldown_timer -= game->delta;
@@ -329,6 +332,7 @@ void update_player(Game *game){
             emit_particles(game, shoot->emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
             
         }
+        //shooting
     } else if (shoot->holding && player->shoot.cooldown_timer <= 0){
         shoot->holding = 0;
         shoot->perfect_charged = 0;
@@ -336,6 +340,7 @@ void update_player(Game *game){
         b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
                          && shoot->holding_timer <= (shoot->perfect_hold_time + shoot->perfect_buffer);
                          
+        shoot->just_shoot = perfect_shoot ? 2 : 1;
         player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
         
         shoot->holding_timer = 0;
@@ -680,15 +685,19 @@ void render(Game *game, screen_buffer *Buffer){
         f32 perfect_length_multiplier = 2.0f;
         f32 max_length_multiplier = 2.2f;
         
+        f32 start_length_multiplier = length_multiplier < 1.0f ? length_multiplier : 1.0f;
+        
         if (shoot->holding_timer <= shoot->perfect_hold_time){
             f32 t = shoot->holding_timer / shoot->perfect_hold_time;
-            length_multiplier = lerp(1.0f, perfect_length_multiplier, t * t);
+            length_multiplier = lerp(start_length_multiplier, perfect_length_multiplier, t * t);
         } else if (shoot->holding_timer <= shoot->perfect_hold_time + shoot->perfect_buffer){
             f32 t = (shoot->holding_timer - shoot->perfect_hold_time) / shoot->perfect_buffer;
             length_multiplier = lerp(perfect_length_multiplier, max_length_multiplier, t);
         } else{
             length_multiplier = lerp(length_multiplier, 1.0f, game->delta * 4.0f);
         }
+    } else if (shoot->just_shoot){
+        length_multiplier = shoot->just_shoot == 2 ? 0.25f : 0.7f;
     } else{
         length_multiplier = lerp(length_multiplier, 1.0f, game->delta * 4.0f);
     }
@@ -701,6 +710,10 @@ void render(Game *game, screen_buffer *Buffer){
         base_length_multiplier   = length_multiplier * 1.5f;;
         middle_length_multiplier = length_multiplier * 1.5f;;
         end_length_multiplier    = length_multiplier * 1.5f;;
+    } else if (length_multiplier < 1.0f){
+        base_length_multiplier   = length_multiplier;
+        middle_length_multiplier = length_multiplier;
+        end_length_multiplier    = length_multiplier;
     }
     
     draw_line(Buffer,

@@ -104,6 +104,7 @@ struct Player{
         f32 perfect_hold_time = 0.5f;
         f32 perfect_buffer = 0.3f;
         b32 perfect_charged;
+        i32 just_shoot;
         particle_emitter emitter;
         particle_emitter charged_emitter;
     };
