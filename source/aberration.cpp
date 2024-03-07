@@ -21,19 +21,19 @@ RenderFunnyGradient(screen_buffer *Buffer, int XOffset, int YOffset){
 Game global_game;
 
 void loop_world_position(Game *game, Vector2 *position){
-    if (position->y < game->bottom_right_world_position.y){
+    while (position->y < game->bottom_right_world_position.y){
         position->y += game->top_left_world_position.y;
     }
     
-    if (position->y >= game->top_left_world_position.y){
+    while (position->y >= game->top_left_world_position.y){
         position->y -= game->top_left_world_position.y;
     }
     
-    if (position->x < game->top_left_world_position.x){
+    while (position->x < game->top_left_world_position.x){
         position->x += game->bottom_right_world_position.x;
     }
     
-    if (position->x >= game->bottom_right_world_position.x){
+    while (position->x >= game->bottom_right_world_position.x){
         position->x -= game->bottom_right_world_position.x;
     }
 }
@@ -133,8 +133,15 @@ void InitGame(){
     global_game.player.entity.scale = {3, 3};
     
     global_game.particles = array_init(sizeof(Particle), 100000);
-    
     global_game.line_entities = array_init(sizeof(line_entity), 100000);
+    
+    global_game.fly_enemies = array_init(sizeof(fly_enemy), 100000);
+    
+    fly_enemy enemy1 = {};
+    enemy1.entity.position = {30, 35};
+    enemy1.entity.scale = {3, 4};
+    
+    array_add(&global_game.fly_enemies, &enemy1);
     
     /*
     global_game.walls = array_init(sizeof(Entity));
@@ -152,7 +159,7 @@ void InitGame(){
     
     global_game.tilemap = {};
     
-    particle_emitter *shoot_emitter = &global_game.player.shoot.emitter;
+    particle_emitter *shoot_emitter = &global_game.player.shoot.wall_hit_emitter;
     *shoot_emitter = {};
     shoot_emitter->speed_min    = 40;
     shoot_emitter->speed_max    = 150;
@@ -305,7 +312,7 @@ void update_player(Game *game){
     if (game->input.mouse_right_key && player->melee_cooldown_timer <= 0){
         player->melee_cooldown_timer = 0.5f;
         Vector2 direction = subtract(game->input.mouse_world_position, player->entity.position);
-        emit_particles(game, player->shoot.emitter, direction, player->entity.position, 1.0f);
+        emit_particles(game, player->shoot.wall_hit_emitter, direction, player->entity.position, 1.0f);
     }
     
     //shoot logic
@@ -329,7 +336,7 @@ void update_player(Game *game){
         if (shoot->holding_timer >= shoot->perfect_hold_time && !shoot->perfect_charged){
             shoot->perfect_charged = 1;
             
-            emit_particles(game, shoot->emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
+            emit_particles(game, shoot->wall_hit_emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
             
         }
         //shooting
@@ -345,7 +352,10 @@ void update_player(Game *game){
         
         shoot->holding_timer = 0;
     
-        f32 shoot_length = perfect_shoot ? 400 : 40;
+        f32 shoot_length = perfect_shoot ? 600 : 40;
+        
+        //recoil
+        add(&player->velocity, multiply(multiply(player_to_mouse, -1), perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
         
         Vector2 end_point = add(player->entity.position, multiply(player_to_mouse, shoot_length));
         Line line = {};
@@ -367,10 +377,10 @@ void update_player(Game *game){
         
         for (int i = 0; i < collision_count; i++){
             if (hits.enter_count > i){
-                emit_particles(game, player->shoot.emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
+                emit_particles(game, player->shoot.wall_hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
             }
             if (hits.exit_count > i){
-                emit_particles(game, player->shoot.emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
+                emit_particles(game, player->shoot.wall_hit_emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
             }
             
             if (hits.enter_count > i && hits.exit_count > i){
@@ -388,6 +398,8 @@ void update_player(Game *game){
                 array_add(&game->line_entities, &wall_visual_line);
             }
         }
+    } else{
+        shoot->holding_timer = 0;
     }
     
     clamp(&player->velocity.y, -150, 200);
@@ -707,9 +719,9 @@ void render(Game *game, screen_buffer *Buffer){
     f32 end_length_multiplier    = 1.0f;
 
     if (length_multiplier > 1.0f){
-        base_length_multiplier   = length_multiplier * 1.5f;;
-        middle_length_multiplier = length_multiplier * 1.5f;;
-        end_length_multiplier    = length_multiplier * 1.5f;;
+        base_length_multiplier   = lerp(length_multiplier, length_multiplier * 1.5f, game->delta * 20);
+        middle_length_multiplier = lerp(length_multiplier, length_multiplier * 1.5f, game->delta * 20);
+        end_length_multiplier    = lerp(length_multiplier, length_multiplier * 1.5f, game->delta * 20);
     } else if (length_multiplier < 1.0f){
         base_length_multiplier   = length_multiplier;
         middle_length_multiplier = length_multiplier;
@@ -796,6 +808,13 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         }
         
         draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_width, line->color);
+    }
+    
+    //draw enemies
+    for  (int i = 0; i < game->fly_enemies.count; i++){ 
+        fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
+        
+        draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0x3366aa);
     }
 }
 

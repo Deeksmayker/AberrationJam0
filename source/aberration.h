@@ -6,10 +6,11 @@
 #define assert(Expression)
 #endif
 
-#define UNIT_SIZE 6.0f;
+//6 at 1280x720
+#define UNIT_SIZE 4.5f;
 
 global_variable int collisions_count = 8;
-global_variable f32 unit_size = 6.0f;
+global_variable f32 unit_size = 4.5f;
 
 struct Vector2{
     f32 x;  
@@ -96,6 +97,9 @@ struct Player{
     f32 melee_cooldown_timer;
     //shoot
     struct shooter{
+        f32 pefrect_damage = 10.0f;
+        f32 damage = 4.0f;
+        f32 push_force = 60;
         b32 holding;
         f32 cooldown_timer;
         f32 cooldown = 0.4f;
@@ -105,7 +109,7 @@ struct Player{
         f32 perfect_buffer = 0.3f;
         b32 perfect_charged;
         i32 just_shoot;
-        particle_emitter emitter;
+        particle_emitter wall_hit_emitter;
         particle_emitter charged_emitter;
     };
     
@@ -162,6 +166,9 @@ struct collision{
 
 struct fly_enemy{
     Entity entity;  
+    f32 hp = 10.0f;
+    
+    particle_emitter hit_emitter;
 };
 
 struct Game{
