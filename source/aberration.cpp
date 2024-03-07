@@ -649,6 +649,50 @@ void add_fly_enemy(Game *game, Vector2 position){
     
     enemy.lines = array_init(sizeof(line_entity), 100);
     
+    line_entity triangle_line_1 = {};
+    triangle_line_1.line = {};
+    triangle_line_1.line.start_position = {-2, -2};
+    triangle_line_1.line.end_position = {0, 3};
+    triangle_line_1.visual_start_width = 1.5f;
+    triangle_line_1.visual_end_width = 0.7f;
+    line_entity triangle_line_2 = {};
+    triangle_line_2.line = {};
+    triangle_line_2.line.start_position = {2, -1};
+    triangle_line_2.line.end_position = {0, 3};
+    triangle_line_2.visual_start_width = 1.5f;
+    triangle_line_2.visual_end_width = 0.7f;
+    line_entity triangle_line_3 = {};
+    triangle_line_3.line = {};
+    triangle_line_3.line.start_position = {-2, -2};
+    triangle_line_3.line.end_position = {0, -1};
+    triangle_line_3.visual_start_width = 1.5f;
+    triangle_line_3.visual_end_width = 0.5f;
+    line_entity triangle_line_4 = {};
+    triangle_line_4.line = {};
+    triangle_line_4.line.start_position = {2, -2};
+    triangle_line_4.line.end_position = {0, -1};
+    triangle_line_4.visual_start_width = 1.5f;
+    triangle_line_4.visual_end_width = 0.5f;
+    line_entity left_wing_line = {};
+    left_wing_line.line = {};
+    left_wing_line.line.start_position = {0, 0};
+    left_wing_line.line.end_position = {-4, 4};
+    left_wing_line.visual_start_width = 0.3f;
+    left_wing_line.visual_end_width = 2;
+    line_entity right_wing_line = {};
+    right_wing_line.line = {};
+    right_wing_line.line.start_position = {0, 0};
+    right_wing_line.line.end_position = {4, 4};
+    right_wing_line.visual_start_width = 0.3f;
+    right_wing_line.visual_end_width = 2;
+    
+    array_add(&enemy.lines, &triangle_line_1);
+    array_add(&enemy.lines, &triangle_line_2);
+    array_add(&enemy.lines, &triangle_line_3);
+    array_add(&enemy.lines, &triangle_line_4);
+    array_add(&enemy.lines, &left_wing_line);
+    array_add(&enemy.lines, &right_wing_line);
+    
     array_add(&global_game.fly_enemies, &enemy);
 }
 
@@ -1075,13 +1119,19 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         
         //enemy->entity.position.x += game->delta;
         
-        draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0x3366aa);
+        //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0x3366aa);
         
         for (int j = 0; j < enemy->lines.count; j++){
-            line_entity *bullet_hole = (line_entity *)array_get(&enemy->lines, j);
-            Vector2 start_position = add(bullet_hole->line.start_position, enemy->entity.position);
-            Vector2 end_position = add(bullet_hole->line.end_position, enemy->entity.position);
-            draw_line(Buffer, start_position, end_position, bullet_hole->visual_start_width, bullet_hole->visual_end_width, bullet_hole->color);
+            line_entity *line_arr = (line_entity *)array_get(&enemy->lines, j);
+            line_entity line = *line_arr;
+            f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
+            Vector2 start_position = add(line.line.start_position, enemy->entity.position);
+            Vector2 end_position = add(line.line.end_position, enemy->entity.position);
+            start_position.x += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
+            start_position.y += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
+            end_position.x += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
+            end_position.y += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
+            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, line.color);
         }
     }
     
