@@ -11,6 +11,7 @@
 
 global_variable int collisions_count = 8;
 global_variable f32 unit_size = 4.5f;
+global_variable u32 **splash_buffer;//[1080][972];
 
 struct Vector2{
     f32 x;  
@@ -215,6 +216,7 @@ struct collision{
 struct Game{
     Vector2 top_left_world_position;
     Vector2 bottom_right_world_position;
+    Vector2 world_size;
     Vector2 camera_player_position;
     Input input;
     f64 time;

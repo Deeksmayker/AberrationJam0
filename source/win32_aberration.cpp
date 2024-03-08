@@ -22,6 +22,9 @@ typedef u32 b32;
 typedef float  f32;
 typedef double f64;
 
+global_variable int game_width_pixels = 960;
+global_variable int game_height_pixels = 540;
+
 #include "aberration.cpp"
 
 #include <windows.h>
@@ -243,7 +246,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
     WNDCLASS WindowClass = {0};    
     
-    Win32ResizeDIBSection(&GlobalBackBuffer, 960, 540);
+    Win32ResizeDIBSection(&GlobalBackBuffer, game_width_pixels, game_height_pixels);
     
     WindowClass.style       = CS_HREDRAW | CS_VREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;

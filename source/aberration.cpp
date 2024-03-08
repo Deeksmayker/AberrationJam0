@@ -77,6 +77,7 @@ void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f
             if (x >= Buffer->Width && x < 0){
                 continue;
             }
+            
             *pixel++ = color;
         }
         row += Buffer->Pitch;
@@ -86,8 +87,6 @@ void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f
 void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color){
     draw_rect(Buffer, position.x, position.y, size.x, size.y, color);
 }
-
-
 
 void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 start_width, f32 end_width, u32 color){
     Vector2 vector_to_end = subtract({end_x, end_y}, {start_x, start_y});
@@ -117,8 +116,6 @@ void draw_line(screen_buffer *Buffer, line_entity line_e){
     
 }
 
-
-
 void fill_background(screen_buffer *Buffer, u32 color){
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
@@ -129,6 +126,55 @@ void fill_background(screen_buffer *Buffer, u32 color){
         ROW += Buffer->Pitch;
     }
 }
+
+void draw_splashes(Game *game, screen_buffer *Buffer){
+    i32 up_splashes_index   = camera_position.y * unit_size + Buffer->Height * 0.5f;
+    i32 down_splashes_index = camera_position.y * unit_size - Buffer->Height * 0.5f;
+    
+    u8 *ROW = (u8 *) Buffer->Memory;
+    for (int y = 0; y < Buffer->Height; y++){
+        u32 *Pixel = (u32 *) ROW;
+        for (int x = 0; x < Buffer->Width; x++){
+            i32 y_world_index = y / unit_size + camera_position.y - 1;
+            
+            Vector2 world_y_index_position = {0, (f32)y_world_index};
+            loop_world_position(game, &world_y_index_position);
+            i32 y_index = world_y_index_position.y * unit_size;// + y;
+            
+            if (y_index >= game->world_size.y * unit_size || splash_buffer[y_index][x] == 0){
+                Pixel++;
+                continue;
+            }
+            
+            *Pixel++ = splash_buffer[y_index][x];                  
+        }
+        ROW += Buffer->Pitch;
+    }
+}
+
+void add_splash(Game *game, Entity entity, u32 color){
+    i32 up_pixel_position     = (i32)((entity.position.y + entity.scale.y * 0.5f) * unit_size);
+    i32 bottom_pixel_position = (i32)((entity.position.y - entity.scale.y * 0.5f) * unit_size);
+    i32 left_pixel_position   = (i32)((entity.position.x - entity.scale.x * 0.5f) * unit_size);
+    i32 right_pixel_position  = (i32)((entity.position.x + entity.scale.x * 0.5f) * unit_size);
+    
+    for (int y = bottom_pixel_position; y <= up_pixel_position; y++){
+        for (int x = left_pixel_position; x <= right_pixel_position; x++){
+            Vector2 world_pixel_position = {((f32)x) / unit_size , ((f32)y) / unit_size};
+            loop_world_position(game, &world_pixel_position);
+            i32 x_pixel = world_pixel_position.x * unit_size;
+            i32 y_pixel = world_pixel_position.y * unit_size;
+            
+            //xdd
+            //Positions - bottom to top, but pixels is top to bottom, so we subtract height from current index
+            //We need this to properly convert world positions to splash buffer indexes
+            //y_pixel = global_game.world_size.y * unit_size - y_pixel - 1;
+            
+            splash_buffer[y_pixel][x_pixel] = color;
+        }
+    }
+}
+
 
 
 void InitGame(){
@@ -165,6 +211,15 @@ void InitGame(){
     
     global_game.tilemap = {};
     
+    global_game.top_left_world_position     = {0, (f32)global_game.tilemap.rows * global_game.tilemap.block_scale};
+    global_game.bottom_right_world_position = {(f32)global_game.tilemap.columns * global_game.tilemap.block_scale, 0};
+    global_game.world_size = {global_game.bottom_right_world_position.x, global_game.top_left_world_position.y};
+    
+    splash_buffer = (u32 **)malloc(global_game.world_size.y * unit_size * sizeof(u32 *));
+    for (int i = 0; i < global_game.world_size.y * unit_size; i++){
+        splash_buffer[i] = (u32 *)calloc(global_game.world_size.x * unit_size, sizeof(u32));
+    }
+    
     particle_emitter *shoot_emitter = &global_game.player.shoot.wall_hit_emitter;
     *shoot_emitter = {};
     shoot_emitter->speed_min    = 40;
@@ -176,9 +231,6 @@ void InitGame(){
     shoot_emitter->lifetime_min = 0.1f;
     shoot_emitter->lifetime_max = 0.5f;
     shoot_emitter->shape = (particle_shape)0;
-    
-    global_game.top_left_world_position     = {0, (f32)global_game.tilemap.rows * global_game.tilemap.block_scale};
-    global_game.bottom_right_world_position = {(f32)global_game.tilemap.columns * global_game.tilemap.block_scale, 0};
     
     particle_emitter *pole_ride_emitter = &global_game.player.pole_ride_emitter;
     *pole_ride_emitter = {};
@@ -246,7 +298,6 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     
     global_game.delta = delta;
     update(&global_game);
-    
     
     f32 screen_center = (Buffer->ScreenHeight / unit_size) * 0.5f;
     f32 additional_vertical_position = (input.mouse_screen_position.y / unit_size) - screen_center;
@@ -542,7 +593,8 @@ void update_fly_enemies(Game *game){
                 fly->circling_time = 0;
                 fly->circling = 0;
                 
-                b32 will_shoot = rnd() % 256 < 196;
+                u32 chance = rnd() % 256;
+                b32 will_shoot = chance < 190;
                 
                 if (will_shoot){
                     fly->strafing = 1;
@@ -753,6 +805,8 @@ void update_particles(Game *game){
         Vector2 next_position = add(particle->entity.position, multiply(particle->velocity, game->delta));
         
         particle->entity.position = next_position;
+        
+        add_splash(game, particle->entity, particle->color);
     }
 }
 
@@ -976,11 +1030,12 @@ line_hits check_line_collision(Game *game, Line line){
 
 void render(Game *game, screen_buffer *Buffer){
     fill_background(Buffer, 0xffffff);
+    draw_splashes(game, Buffer);
     
     draw_entities(game, Buffer);
 
     Player *player = &game->player;
-    draw_rect(Buffer, player->entity.position, player->entity.scale, 0xff3423);
+    draw_rect(Buffer, player->entity.position, player->entity.scale, 0x11ff3423);
     //Vector2 added = add(game->player.entity.position, {10, 10});
     
     Vector2 player_to_mouse = subtract(game->input.mouse_world_position, game->camera_player_position);
