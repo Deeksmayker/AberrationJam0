@@ -61,6 +61,8 @@ struct Particle{
     f32 lifetime;
     f32 max_lifetime;
     
+    b32 leave_splash;
+    
     u32 color = 0x34f132;
 };
 
@@ -78,6 +80,9 @@ struct particle_emitter{
     f32 spread = 0.2f;
     f32 lifetime_min = 0.5f;
     f32 lifetime_max = 2;
+    
+    b32 try_splash;
+    f32 splash_chance;
     
     u32 color = 0x341132;
 };
@@ -230,6 +235,8 @@ struct Game{
     Array fly_enemy_projectiles;
     Player player;
     Tilemap tilemap;
+    
+    particle_emitter blood_emitter;
 };
 
 global_variable Vector2 camera_position;

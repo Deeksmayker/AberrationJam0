@@ -175,6 +175,13 @@ void add_splash(Game *game, Entity entity, u32 color){
     }
 }
 
+b32 in_blood(Entity entity){
+    if (splash_buffer[(i32)(entity.position.y * unit_size)][(i32)(entity.position.x * unit_size)] != 0){
+        return 1;
+    }
+    
+    return 0;
+}
 
 
 void InitGame(){
@@ -244,8 +251,20 @@ void InitGame(){
     pole_ride_emitter->color = 0xffff22;
     pole_ride_emitter->spread = 1;
     pole_ride_emitter->shape = (particle_shape)1;
-
     
+    particle_emitter *blood_emitter = &global_game.blood_emitter;
+    *blood_emitter = {};
+    blood_emitter->speed_min    = 20;
+    blood_emitter->speed_max    = 60;
+    blood_emitter->scale_min    = 0.4f;
+    blood_emitter->scale_max    = 1.0f;
+    blood_emitter->lifetime_min = 0.6f;
+    blood_emitter->lifetime_max = 1.5f;
+    blood_emitter->color = 0xaa1133;
+    blood_emitter->spread = 1;
+    blood_emitter->shape = (particle_shape)1;
+    blood_emitter->try_splash = 1;
+    blood_emitter->splash_chance = 0.5f;
     
     //fill_level1_tilemap(&global_game);
 }
@@ -452,11 +471,18 @@ void update_player(Game *game){
         int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
         
         for (int i = 0; i < collision_count; i++){
+            particle_emitter *hit_emitter;
+            if (hits.hit_types[i] == 2){
+                hit_emitter = &game->blood_emitter;
+            } else{
+                hit_emitter = &player->shoot.wall_hit_emitter;
+            }
+        
             if (hits.enter_count > i){
-                emit_particles(game, player->shoot.wall_hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
+                emit_particles(game, *hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
             }
             if (hits.exit_count > i){
-                emit_particles(game, player->shoot.wall_hit_emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
+                emit_particles(game, *hit_emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
             }
             
             if (hits.enter_count > i && hits.exit_count > i){
@@ -753,6 +779,10 @@ void check_player_collisions(Game *game){
     game->player.grounded = 0;
     
     calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
+    
+    if (in_blood(game->player.entity)){
+        game->player.velocity.y = 100;
+    }
 }
 
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){
@@ -806,7 +836,9 @@ void update_particles(Game *game){
         
         particle->entity.position = next_position;
         
-        add_splash(game, particle->entity, particle->color);
+        if (particle->leave_splash){
+            add_splash(game, particle->entity, particle->color);
+        }
     }
 }
 
@@ -1022,7 +1054,6 @@ line_hits check_line_collision(Game *game, Line line){
             
             in_some_collider = 0;
         }
-
     }
     
     return hits;
@@ -1244,6 +1275,12 @@ void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vec
     rnd_state = (rnd_state + 1) * 3;
     f32 lifetime = rnd(emitter.lifetime_min, emitter.lifetime_max);
     particle.max_lifetime = lifetime;
+    
+    if (emitter.try_splash){
+        if (rnd(0.0f, 1.0f) <= emitter.splash_chance){
+            particle.leave_splash = 1;
+        }
+    }
     
     particle.color = emitter.color;
     
