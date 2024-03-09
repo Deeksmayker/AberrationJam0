@@ -603,7 +603,7 @@ void update_player(Game *game){
         Line line = {};
         line.start_position = player->entity.position;
         line.end_position   = end_point;
-        line.start_width = perfect_shoot ? 2 : 0.5f;
+        line.start_width = perfect_shoot ? 4 : 1.0f;
         line.end_width = line.start_width;
         
         //shoot line render
@@ -953,7 +953,7 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
             case Pole:{
                 if (game->input.up_key){
                     player->velocity.y += 100 * game->delta;
-                    player->velocity.x *= 1.0f - game->delta * 1;
+                    player->velocity.x *= 1.0f - game->delta * 3;
                     player->riding_pole = 1;
                     
                     update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position);
@@ -1136,7 +1136,7 @@ b32 check_box_collision(Entity *rect1, Entity *rect2){
 
 line_hits check_line_collision(Game *game, Line line){
     Vector2 vector_to_end = subtract(line.end_position, line.start_position);
-    int points_count = (((int)magnitude(vector_to_end) + 1) * 4);
+    int points_count = (((int)magnitude(vector_to_end) + 10) * 4);
     
     Vector2 direction = normalized(vector_to_end);
     

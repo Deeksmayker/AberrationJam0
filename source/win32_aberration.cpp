@@ -254,7 +254,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
     
     WindowClass.lpszClassName = "ClassTrulyAberration";
     
-#if DEBUG
+#if defined DEBUG || defined PRINT_FPS
     AttachConsole(ATTACH_PARENT_PROCESS);
     //for printf to work
     freopen("CONOUT$", "w", stdout);
@@ -328,6 +328,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
         f32 MSPerFrame = (f32)(1000.0f * CounterElapsed) / (f32)PerfCountFrequency;
         delta = (f32)(1.0f * CounterElapsed) / (f32)PerfCountFrequency;
         f32 FPS = (f32)PerfCountFrequency / (f32)CounterElapsed;
+#if PRINT_FPS
+        printf("\n%d", (int)FPS);
+#endif
         //Mega-cycles per frame
         f32 MCPF = (f32)CyclesElapsed / 1000.0f / 1000.0f;
         //printf("MS: %f, Fps: %f, MCpf: %f\n", MSPerFrame, FPS, MCPF);
