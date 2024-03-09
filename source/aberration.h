@@ -251,10 +251,13 @@ struct Game{
     particle_emitter blood_emitter;
     
     Gradient background_gradient;
+    Gradient tiles_gradient;
+    Gradient blood_gradient;
 };
 
 global_variable Vector2 camera_position;
 
+void draw_world_rect(screen_buffer *Buffer, Vector2 position, Vector2 scale, Gradient gradient);
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color);
 void draw_rect(screen_buffer *Buffer, Vector2 position, Vector2 size, u32 color);
 void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 width, u32 color);
@@ -262,6 +265,7 @@ void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_positi
 void draw_line(screen_buffer *Buffer, Line line, u32 color);
 void draw_line(screen_buffer *Buffer, line_entity line_e); 
 
+f32 get_random_fraction_from_pixel_position(Game *game, i32 x, i32 y, f32 fraction);
 void fill_background(screen_buffer *Buffer, Gradient gradient);
 
 // Time, Input, Bitmap buffer, Sound buffer

@@ -38,6 +38,55 @@ void loop_world_position(Game *game, Vector2 *position){
     }
 }
 
+void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector2 scale, Gradient gradient){
+    f32 screen_world_height = (f32)Buffer->Height / unit_size;
+
+    position.x -= camera_position.x;
+    position.y -= camera_position.y;
+    
+    Vector2 world_position = {position.x, position.y};
+    loop_world_position(&global_game, &world_position);
+    position.x = world_position.x;
+    position.y = world_position.y;
+
+    scale.x  *= unit_size;
+    scale.y *= unit_size;
+    position.x *= unit_size;
+    position.y *= unit_size;
+    u8 *row = (u8 *) Buffer->Memory;
+    
+    i32 upPosition     = clamp((i32)position.y + (i32)(scale.y * 0.5f), 0, Buffer->Height - 1);
+    i32 bottomPosition = clamp((i32)position.y - (i32)(scale.y * 0.5f), 0, Buffer->Height - 1);
+    i32 leftPosition   = clamp((i32)position.x - (i32)(scale.x * 0.5f), 0, Buffer->Width - 1);
+    i32 rightPosition  = clamp((i32)position.x + (i32)(scale.x * 0.5f), 0, Buffer->Width - 1);
+    
+    row += Buffer->Pitch * bottomPosition;
+    
+    for (int y = bottomPosition; y <= upPosition; y++){
+        if (y >= Buffer->Height || y < 0){
+            continue;
+        }
+        u32 *pixel = (u32 *)row;
+        pixel += leftPosition;
+        
+        i32 y_pixel_position = y + game->camera_pixel_position.y;
+        f32 fraction = (y_pixel_position) / game->world_pixel_size.y;
+        
+        for (int x = leftPosition; x <= rightPosition; x++){
+            if (x >= Buffer->Width || x < 0){
+                continue;
+            }
+            
+            f32 real_fraction = get_random_fraction_from_pixel_position(game, x, y_pixel_position, fraction);
+            u32 color = lerp_gradient(gradient, real_fraction);                  
+            
+            *pixel++ = color;
+        }
+        row += Buffer->Pitch;
+    }
+    
+}
+
 
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color){
     f32 screen_world_height = (f32)Buffer->Height / unit_size;
@@ -74,7 +123,7 @@ void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f
         u32 *pixel = (u32 *)row;
         pixel += leftPosition;
         for (int x = leftPosition; x <= rightPosition; x++){
-            if (x >= Buffer->Width && x < 0){
+            if (x >= Buffer->Width || x < 0){
                 continue;
             }
             
@@ -116,6 +165,21 @@ void draw_line(screen_buffer *Buffer, line_entity line_e){
     
 }
 
+f32 get_random_fraction_from_pixel_position(Game *game, i32 x, i32 y, f32 fraction){
+    f32 reduction_power = game->im_dying_man ? 2048.0 : 4096.0;
+    
+    i32 random_value = 0;
+    
+    if (!game->im_dying_man){
+        random_value = (rnd((x & 0xFFFF) << 16 | ((i32)y & 0xFFFF)) + (i32)(game->time * 10)) % 128;
+        random_value -= 64;
+    } else{
+        random_value = rnd() % 128;
+    }
+    
+    return fraction + (f32)random_value  / reduction_power;
+}
+
 void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
@@ -129,18 +193,7 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
 
         for (int x = 0; x < Buffer->Width; x++){
             
-            f32 reduction_power = game->im_dying_man ? 2048.0 : 4096.0;
-            
-            i32 random_value = 0;
-            
-            if (!game->im_dying_man){
-                random_value = (rnd((x & 0xFFFF) << 16 | ((i32)y_pixel_position & 0xFFFF)) + (i32)(game->time * 10)) % 128;
-                random_value -= 64;
-            } else{
-                random_value = rnd() % 128;
-            }
-            
-            f32 real_fraction = fraction + (f32)random_value  / reduction_power;
+            f32 real_fraction = get_random_fraction_from_pixel_position(game, x, y_pixel_position, fraction);
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             *Pixel++ = color;
@@ -155,20 +208,25 @@ void draw_splashes(Game *game, screen_buffer *Buffer){
     
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
+        i32 y_world_index = y / unit_size + camera_position.y - 1;
+        
+        Vector2 world_y_index_position = {0, (f32)y_world_index};
+        loop_world_position(game, &world_y_index_position);
+        i32 y_index = world_y_index_position.y * unit_size;// + y;
+        f32 fraction = (y_index) / game->world_pixel_size.y;
+    
         u32 *Pixel = (u32 *) ROW;
         for (int x = 0; x < Buffer->Width; x++){
-            i32 y_world_index = y / unit_size + camera_position.y - 1;
-            
-            Vector2 world_y_index_position = {0, (f32)y_world_index};
-            loop_world_position(game, &world_y_index_position);
-            i32 y_index = world_y_index_position.y * unit_size;// + y;
             
             if (y_index >= game->world_size.y * unit_size || splash_buffer[y_index][x] == 0){
                 Pixel++;
                 continue;
             }
             
-            *Pixel++ = splash_buffer[y_index][x];                  
+            f32 real_fraction = get_random_fraction_from_pixel_position(game, x, y_index, fraction);
+            u32 color = lerp_gradient(game->blood_gradient, real_fraction);                  
+            
+            *Pixel++ = color;//splash_buffer[y_index][x];                  
         }
         ROW += Buffer->Pitch;
     }
@@ -303,6 +361,32 @@ void InitGame(){
     global_game.background_gradient.colors[3] = sky_white;
     global_game.background_gradient.colors[4] = blue_sky;
     global_game.background_gradient.colors_count = 5;
+    
+    u32 grass = 0x41980a;
+    u32 pale_grass = 0xe3fd98;
+    u32 ground = 0x87421c;
+    
+    global_game.tiles_gradient = {};
+    global_game.tiles_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.tiles_gradient.colors[0] = grass;
+    global_game.tiles_gradient.colors[1] = pale_grass;
+    global_game.tiles_gradient.colors[2] = ground;
+    global_game.tiles_gradient.colors[3] = pale_grass;
+    global_game.tiles_gradient.colors[4] = grass;
+    global_game.tiles_gradient.colors_count = 5;
+    
+    u32 blood_light = 0xdb0000;
+    u32 blood_medium = 0xbb6350;
+    u32 blood_dark = 0x750000;
+    
+    global_game.blood_gradient = {};
+    global_game.blood_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.blood_gradient.colors[0] = blood_light;
+    global_game.blood_gradient.colors[1] = blood_medium;
+    global_game.blood_gradient.colors[2] = blood_dark;
+    global_game.blood_gradient.colors[3] = blood_medium;
+    global_game.blood_gradient.colors[4] = blood_light;
+    global_game.blood_gradient.colors_count = 5;
 }
 
 
@@ -819,7 +903,7 @@ void check_player_collisions(Game *game){
     calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
     
     if (in_blood(game->player.entity)){
-        game->player.velocity.y = 100;
+        //game->player.velocity.y = 100;
     }
 }
 
@@ -1171,20 +1255,23 @@ void render(Game *game, screen_buffer *Buffer){
 void draw_entities(Game *game, screen_buffer *Buffer){
     for (int y = 0; y < game->tilemap.rows; y++){
         for (int x = 0; x < game->tilemap.columns; x++){
-            i32 position_y = game->tilemap.rows - y - 1;
-            i32 position_x = x;
+            Entity tile_entity = {};
+            tile_entity.position = get_tile_world_position(game, x, y);
+            tile_entity.scale = {(f32)game->tilemap.block_scale, (f32)game->tilemap.block_scale};
+            
+            //i32 position_y = game->tilemap.rows - y - 1;
+            //i32 position_x = x;
 
             switch ((TileType)level1[y][x]){
                 case None:{
                     continue;
                 } break;
                 case Ground:{
-                    draw_rect(Buffer, position_x * game->tilemap.block_scale, position_y * game->tilemap.block_scale,
-                              game->tilemap.block_scale, game->tilemap.block_scale, 0x66ffff);
+                    draw_world_rect(game, Buffer, tile_entity.position, tile_entity.scale, game->tiles_gradient);
                 } break;
                 case Pole:{
-                    draw_rect(Buffer, position_x * game->tilemap.block_scale, position_y * game->tilemap.block_scale,
-                              game->tilemap.block_scale * 0.2, game->tilemap.block_scale, 0x22ff22);
+                    tile_entity.scale.x *= 0.2f;
+                    draw_rect(Buffer, tile_entity.position, tile_entity.scale, 0x22ff22);
                 } break;
             }
             
