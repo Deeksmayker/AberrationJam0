@@ -90,6 +90,7 @@ void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             color &= game->current_color_palette;
+            color = lerp_color(color, 0xFF0A0A, EaseOutQuint(game->player.in_blood_progress));
             
             *pixel++ = color;
         }
@@ -240,6 +241,7 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             color &= game->current_color_palette;
+            color = lerp_color(color, 0xFF0A0A, EaseOutQuint(game->player.in_blood_progress));
             
             *Pixel++ = color;
         }
@@ -1023,8 +1025,16 @@ void check_player_collisions(Game *game){
     calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
     
     if (in_blood(game->player.entity)){
-        //game->player.velocity.y = 100;
+        game->player.in_blood_time += game->delta;
+        //shake_camera(game, game->delta);
+    } else{
+        game->player.not_in_blood_time += game->delta;
+        if (game->player.not_in_blood_time > 2){
+            game->player.in_blood_time -= game->delta;
+        }
     }
+    
+    game->player.in_blood_progress = clamp01(lerp(0.0f, 1.0f, game->player.in_blood_time / game->player.max_in_blood_time)); 
 }
 
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){

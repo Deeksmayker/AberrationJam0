@@ -130,6 +130,11 @@ struct Player{
     shooter shoot = {};
         
     particle_emitter pole_ride_emitter;
+    
+    f32 max_in_blood_time = 20;
+    f32 in_blood_time;
+    f32 in_blood_progress;
+    f32 not_in_blood_time;
 };
 
 enum TileType{
