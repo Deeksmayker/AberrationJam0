@@ -265,6 +265,7 @@ void InitGame(){
     blood_emitter->shape = (particle_shape)1;
     blood_emitter->try_splash = 1;
     blood_emitter->splash_chance = 0.5f;
+    blood_emitter->colliding_chance = 0.8f;
     
     //fill_level1_tilemap(&global_game);
 }
@@ -723,7 +724,7 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
 void add_fly_enemy(Game *game, Vector2 position){
     fly_enemy enemy = {};
     enemy.entity.position = position;
-    enemy.entity.scale = {3, 4};
+    enemy.entity.scale = {4, 5};
     
     enemy.lines = array_init(sizeof(line_entity), 100);
     
@@ -830,7 +831,9 @@ void update_particles(Game *game){
         
         particle->velocity.y += game->gravity * game->delta;
         
-        calculate_particle_tilemap_collisions(game, particle, check_tilemap_collisions(game, particle->velocity, particle->entity));
+        if (particle->colliding){
+            calculate_particle_tilemap_collisions(game, particle, check_tilemap_collisions(game, particle->velocity, particle->entity));
+        }
         
         Vector2 next_position = add(particle->entity.position, multiply(particle->velocity, game->delta));
         
@@ -1061,7 +1064,6 @@ line_hits check_line_collision(Game *game, Line line){
 
 void render(Game *game, screen_buffer *Buffer){
     fill_background(Buffer, 0xffffff);
-    draw_splashes(game, Buffer);
     
     draw_entities(game, Buffer);
 
@@ -1151,6 +1153,8 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             
         }
     }
+    
+    draw_splashes(game, Buffer);
     
     //particles
     for (int i = 0; i < game->particles.count; i++){
@@ -1279,7 +1283,17 @@ void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vec
     if (emitter.try_splash){
         if (rnd(0.0f, 1.0f) <= emitter.splash_chance){
             particle.leave_splash = 1;
-        }
+        } 
+    }
+    
+    if (emitter.colliding_chance >= 1.0f){ 
+        particle.colliding = 1;
+    } else if (emitter.colliding_chance <= 0){
+        particle.colliding = 0;
+    } else{
+        if (rnd(0.0f, 1.0f) <= emitter.colliding_chance){
+            particle.colliding = 1;
+        } 
     }
     
     particle.color = emitter.color;

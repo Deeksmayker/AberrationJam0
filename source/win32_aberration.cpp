@@ -254,12 +254,14 @@ int CALLBACK WinMain(HINSTANCE Instance,
     
     WindowClass.lpszClassName = "ClassTrulyAberration";
     
+#if DEBUG
     AttachConsole(ATTACH_PARENT_PROCESS);
     //for printf to work
     freopen("CONOUT$", "w", stdout);
-    
+#endif
     if (!RegisterClass(&WindowClass)){
-        printf("oshiblis");
+        //printf("oshiblis");
+        //@TODO: Handle error in class registration
     }
     HWND Window = CreateWindowExA(
                              0,
@@ -275,7 +277,8 @@ int CALLBACK WinMain(HINSTANCE Instance,
                              Instance,
                              0);
     if (!Window){
-        printf("oshibkaa");
+        //printf("oshibkaa");
+        //@TODO: Handle error in window allocation
     }
     
     LARGE_INTEGER LastCounter;

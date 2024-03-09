@@ -62,6 +62,7 @@ struct Particle{
     f32 max_lifetime;
     
     b32 leave_splash;
+    b32 colliding;
     
     u32 color = 0x34f132;
 };
@@ -80,6 +81,8 @@ struct particle_emitter{
     f32 spread = 0.2f;
     f32 lifetime_min = 0.5f;
     f32 lifetime_max = 2;
+    
+    f32 colliding_chance = 1.0f;
     
     b32 try_splash;
     f32 splash_chance;
