@@ -99,7 +99,7 @@ struct Player{
     Entity entity;
     b32 grounded;
     b32 riding_pole;
-    f32 base_speed = 20;
+    f32 base_speed = 40;
     f32 acceleration = 80;
     f32 air_acceleration = 60;
     f32 friction = 60;
@@ -246,6 +246,12 @@ struct Game{
     Player player;
     Tilemap tilemap;
     
+    Vector2 shake_additional_position {0, 0};
+    Vector2 shake_last_additional_position {0, 0};
+    Vector2 shake_max_power = {6, 6.0f};
+    f32 shake_trauma;
+    f32 shake_trauma_decrease = 0.7f;
+    
     b32 im_dying_man = 0;
     
     particle_emitter blood_emitter;
@@ -257,6 +263,8 @@ struct Game{
 };
 
 global_variable Vector2 camera_position;
+
+f32 hitstop_countdown = 0;
 
 void draw_world_rect(screen_buffer *Buffer, Vector2 position, Vector2 scale, Gradient gradient);
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color);
@@ -288,6 +296,10 @@ collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity
 b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);
 b32 check_box_collision(Entity *rect1, Entity *rect2);
 line_hits check_line_collision(Game *game, Line line);
+
+void shake_camera(Game *game, f32 stress);
+void update_camera_shake(Game *game);
+
 
 void add_fly_enemy(Game *game, Vector2 position);
 

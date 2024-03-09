@@ -4,6 +4,12 @@ global_variable u32 rand_seed = 0;
 #include "aberration.h"
 #include "my_math.cpp"
 
+Game global_game;
+
+Vector2 get_camera_position(){
+    return add(camera_position, global_game.shake_additional_position);
+}
+
 internal void
 RenderFunnyGradient(screen_buffer *Buffer, int XOffset, int YOffset){
     u8 *ROW = (u8 *) Buffer->Memory;
@@ -18,7 +24,6 @@ RenderFunnyGradient(screen_buffer *Buffer, int XOffset, int YOffset){
     }
 }
 
-Game global_game;
 
 void loop_world_position(Game *game, Vector2 *position){
     while (position->y < game->bottom_right_world_position.y){
@@ -41,8 +46,12 @@ void loop_world_position(Game *game, Vector2 *position){
 void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector2 scale, Gradient gradient){
     f32 screen_world_height = (f32)Buffer->Height / unit_size;
 
-    position.x -= camera_position.x;
-    position.y -= camera_position.y;
+    //position.x -= camera_position.x;
+    //position.y -= camera_position.y;
+    
+    position.x -= get_camera_position().x;
+    position.y -= get_camera_position().y;
+
     
     Vector2 world_position = {position.x, position.y};
     loop_world_position(&global_game, &world_position);
@@ -91,8 +100,12 @@ void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector
 void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f32 height, u32 color){
     f32 screen_world_height = (f32)Buffer->Height / unit_size;
 
-    xPosition -= camera_position.x;
-    yPosition -= camera_position.y;
+    //xPosition -= camera_position.x;
+    //yPosition -= camera_position.y;
+    
+    xPosition -= get_camera_position().x;
+    yPosition -= get_camera_position().y;
+
     
     if (yPosition < 0 && abs(yPosition + screen_world_height) < screen_world_height){
 //        yPosition = abs(yPosition) - screen_world_height;
@@ -212,7 +225,7 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
         u32 *Pixel = (u32 *) ROW;
-        Vector2 pixel_world_position = {0, ((f32)y + game->camera_pixel_position.y) / unit_size};
+        Vector2 pixel_world_position = {game->camera_pixel_position.x / unit_size, ((f32)y + game->camera_pixel_position.y) / unit_size};
         loop_world_position(game, &pixel_world_position);
         
         f32 y_pixel_position = pixel_world_position.y * unit_size;
@@ -231,12 +244,14 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
 }
 
 void draw_splashes(Game *game, screen_buffer *Buffer){
-    i32 up_splashes_index   = camera_position.y * unit_size + Buffer->Height * 0.5f;
-    i32 down_splashes_index = camera_position.y * unit_size - Buffer->Height * 0.5f;
+    i32 up_splashes_index   = get_camera_position().y * unit_size + Buffer->Height * 0.5f;
+    i32 down_splashes_index = get_camera_position().y * unit_size - Buffer->Height * 0.5f;
+    
+    i32 additional_x = get_camera_position().x * unit_size;
     
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
-        i32 y_world_index = y / unit_size + camera_position.y - 1;
+        i32 y_world_index = y / unit_size + get_camera_position().y - 1;
         
         Vector2 world_y_index_position = {0, (f32)y_world_index};
         loop_world_position(game, &world_y_index_position);
@@ -246,12 +261,12 @@ void draw_splashes(Game *game, screen_buffer *Buffer){
         u32 *Pixel = (u32 *) ROW;
         for (int x = 0; x < Buffer->Width; x++){
             
-            if (y_index >= game->world_size.y * unit_size || splash_buffer[y_index][x] == 0){
+            if (y_index >= game->world_size.y * unit_size || splash_buffer[y_index][x + additional_x] == 0){
                 Pixel++;
                 continue;
             }
             
-            f32 real_fraction = get_random_fraction_from_pixel_position(game, x, y_index, fraction);
+            f32 real_fraction = get_random_fraction_from_pixel_position(game, x + additional_x, y_index, fraction);
             u32 color = lerp_gradient(game->blood_gradient, real_fraction);                  
             
             *Pixel++ = color;//splash_buffer[y_index][x];                  
@@ -448,10 +463,10 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
                                  
     input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y + camera_position.y};
     
-    global_game.camera_pixel_position = multiply(camera_position, unit_size);
+    global_game.camera_pixel_position = multiply(get_camera_position(), unit_size);
     
     f32 screen_world_height = (f32)Buffer->Height / unit_size;
-    if(global_game.top_left_world_position.y - camera_position.y < screen_world_height
+    if(global_game.top_left_world_position.y - get_camera_position().y < screen_world_height
                             && global_game.player.entity.position.y < screen_world_height){
         global_game.camera_player_position.y = global_game.player.entity.position.y + global_game.top_left_world_position.y; 
         global_game.camera_player_position.x = global_game.player.entity.position.x;
@@ -471,6 +486,12 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     if (delta > frame_time){
         global_game.delta = frame_time;
         while(delta > frame_time){
+            if (hitstop_countdown > 0){
+                hitstop_countdown -= frame_time;
+                global_game.delta = 0.001f;
+            } else{
+                global_game.delta = frame_time;
+            }
             update(&global_game);
             delta -= frame_time;
         }
@@ -478,7 +499,13 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
         previous_delta = delta;
     } 
     
-    global_game.delta = delta;
+    if (hitstop_countdown > 0){
+        hitstop_countdown -= delta;
+        global_game.delta = 0.001f;
+    } else{
+        global_game.delta = delta;
+    }
+    
     update(&global_game);
     
     f32 screen_center = (Buffer->ScreenHeight / unit_size) * 0.5f;
@@ -500,6 +527,7 @@ void update(Game *game){
     update_fly_enemy_projectiles(game);
     update_player(game);
     update_particles(game);
+    update_camera_shake(game);
     debug_update(game);
 
     game->player.entity.position.x += game->player.velocity.x * game->delta;
@@ -619,6 +647,8 @@ void update_player(Game *game){
         line.start_width = perfect_shoot ? 5.0f : 2.0f;
         line.end_width = line.start_width;
         
+        shake_camera(game, perfect_shoot ? 0.5f : 0.1f);
+        
         //shoot line render
         line_entity visual_line = {};
         visual_line.line = line;
@@ -664,10 +694,14 @@ void update_player(Game *game){
                     wall_visual_line.color = 0xffffff;
                     array_add(&game->line_entities, &wall_visual_line);
                 } else if (hits.hit_types[i] == 2){
+                    //hit enemy
                     wall_visual_line.color = 0xcc3333;
                     subtract(&wall_visual_line.line.start_position, hits.enemy_hits[i]->entity.position);
                     subtract(&wall_visual_line.line.end_position, hits.enemy_hits[i]->entity.position);
                     array_add(&hits.enemy_hits[i]->lines, &wall_visual_line);
+                    
+                    hitstop_countdown += 0.1f;
+                    shake_camera(game, 0.1f);
                 }
             }
         }
@@ -798,6 +832,10 @@ void update_fly_enemies(Game *game){
         if (check_box_collision(&fly->entity, &game->player.entity)){
             //Enemy hit player
             game->player.velocity.y += 60;
+            emit_particles(game, game->blood_emitter, direction_to_player, game->player.entity.position, 1);
+            shake_camera(game, 0.6f);
+            
+            hitstop_countdown += 0.2f;
         }
     }
 }
@@ -824,8 +862,12 @@ void update_fly_enemy_projectiles(Game *game){
         loop_world_position(game, &projectile->entity.position);
         
         if (check_box_collision(&projectile->entity, &game->player.entity)){
-            //projectile hit
+            //projectile hit player
             game->player.velocity.y += 40;
+            
+            emit_particles(game, game->blood_emitter, projectile->direction, game->player.entity.position, 1);
+            shake_camera(game, 0.6f);
+            hitstop_countdown += 0.2f;
             
             array_remove(&game->fly_enemy_projectiles, i);
             return;
@@ -973,6 +1015,7 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                     player->velocity.y += 100 * game->delta;
                     player->velocity.x *= 1.0f - game->delta * 3;
                     player->riding_pole = 1;
+                    shake_camera(game, game->delta * 0.3f);
                     
                     update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position);
                 }
@@ -1475,7 +1518,30 @@ void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vec
     particle.velocity = multiply(randomized_direction, randomized_speed);
     
     array_add(&game->particles, &particle);
+}
+
+void shake_camera(Game *game, f32 stress){
+    game->shake_trauma = clamp01(game->shake_trauma + stress);
+}
+
+void update_camera_shake(Game *game){
+    f32 current_shake = game->shake_trauma * game->shake_trauma;
     
+    if (current_shake <= 0){
+        game->shake_additional_position = {0, 0};
+        return;
+    }
+    
+    Vector2 previous_shake_position = game->shake_last_additional_position;
+    
+    game->shake_last_additional_position = {
+                                 game->shake_max_power.x * ((f32)((rnd(100  * (i32)(game->time * 10))) % 10000)) / 10000,
+                                 game->shake_max_power.y * ((f32)((rnd(1000 * (i32)(game->time * 10))) % 10000)) / 10000};
+    multiply(&game->shake_last_additional_position, current_shake);
+    
+    add(&game->shake_additional_position, subtract(game->shake_last_additional_position, previous_shake_position));
+    
+    game->shake_trauma = clamp01(game->shake_trauma - game->delta * game->shake_trauma_decrease);
 }
 
 void debug_update(Game *game){
