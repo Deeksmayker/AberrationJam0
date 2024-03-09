@@ -42,6 +42,10 @@ f32 clamp(f32 value, f32 min, f32 max){
     return value;
 }
 
+f32 clamp01(f32 value){
+    return clamp(value, 0.0f, 1.0f);
+}
+
 void clamp(f32 *value, f32 min, f32 max){
     if (*value <= min){
         *value = min;

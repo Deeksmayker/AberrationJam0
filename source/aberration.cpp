@@ -152,6 +152,24 @@ void draw_line(screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 e
         draw_rect(Buffer, x, y, block_width, block_width, color);
     }
 }
+
+void draw_line_gradient(Game *game, screen_buffer *Buffer, f32 start_x, f32 start_y, f32 end_x, f32 end_y, f32 start_width, f32 end_width, Gradient gradient){
+    Vector2 vector_to_end = subtract({end_x, end_y}, {start_x, start_y});
+    int points_count = (((int)magnitude(vector_to_end) + 10) * 4);
+    
+    for (int i = 0; i <= points_count; i++){
+        f32 t = lerp((f32)0, (f32)1, (f32)i / (f32)points_count);
+        
+        f32 x = lerp(start_x, end_x, t);
+        f32 y = lerp(start_y, end_y, t);
+        
+        f32 block_width = lerp(start_width, end_width, t);
+        
+        draw_world_rect(game, Buffer, {x, y}, {block_width, block_width}, gradient);
+    }
+    
+}
+
 void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 start_width, f32 end_width, u32 color){
     draw_line(Buffer, start_position.x, start_position.y, end_position.x, end_position.y, start_width, end_width, color);
 }
@@ -177,7 +195,17 @@ f32 get_random_fraction_from_pixel_position(Game *game, i32 x, i32 y, f32 fracti
         random_value = rnd() % 128;
     }
     
-    return fraction + (f32)random_value  / reduction_power;
+    f32 result = fraction + (f32)random_value  / reduction_power;
+    
+    if (result < 0){
+        result *= -1;
+    }
+    
+    if (result > 1){
+        result -= 1;
+    }
+    
+    return result;
 }
 
 void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
@@ -1320,7 +1348,12 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             line->visual_end_width = line->line.end_width;
         }
         
-        draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_start_width, line->visual_end_width, line->color);
+        if (line->color != 0xffffff){
+            draw_line(Buffer, line->line.start_position, line->line.end_position, line->visual_start_width, line->visual_end_width, line->color);
+        } else{
+            draw_line_gradient(game, Buffer, line->line.start_position.x, line->line.start_position.y, line->line.end_position.x, line->line.end_position.y, line->visual_start_width, line->visual_end_width, game->background_gradient);
+        
+        }
         
         if (line->die_after_drawing){
             array_remove(&game->line_entities, i);

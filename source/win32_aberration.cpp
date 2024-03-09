@@ -266,7 +266,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
     HWND Window = CreateWindowExA(
                              0,
                              WindowClass.lpszClassName,
-                             "Truly Aberration",
+                             "And the world turns red",
                              WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                              CW_USEDEFAULT,
                              CW_USEDEFAULT,
