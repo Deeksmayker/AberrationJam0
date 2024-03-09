@@ -415,6 +415,19 @@ void InitGame(){
     global_game.blood_gradient.colors[3] = blood_medium;
     global_game.blood_gradient.colors[4] = blood_light;
     global_game.blood_gradient.colors_count = 5;
+    
+    u32 pale_green = 0x98fb98;
+    u32 bamboo_green = 0xe2dbac;
+    u32 dark_green = 0x2d4b2d;
+    
+    global_game.pole_gradient = {};
+    global_game.pole_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.pole_gradient.colors[0] = pale_green;
+    global_game.pole_gradient.colors[1] = bamboo_green;
+    global_game.pole_gradient.colors[2] = dark_green;
+    global_game.pole_gradient.colors[3] = bamboo_green;
+    global_game.pole_gradient.colors[4] = pale_green;
+    global_game.pole_gradient.colors_count = 5;
 }
 
 
@@ -586,7 +599,7 @@ void update_player(Game *game){
         
         shoot->holding_timer = 0;
     
-        f32 shoot_length = perfect_shoot ? 600 : 40;
+        f32 shoot_length = perfect_shoot ? 250 : 40;
         
         //recoil
         Vector2 recoil_direction = multiply(player_to_mouse, -1);
@@ -603,7 +616,7 @@ void update_player(Game *game){
         Line line = {};
         line.start_position = player->entity.position;
         line.end_position   = end_point;
-        line.start_width = perfect_shoot ? 4 : 1.0f;
+        line.start_width = perfect_shoot ? 5.0f : 2.0f;
         line.end_width = line.start_width;
         
         //shoot line render
@@ -947,7 +960,12 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                 if (collisions_data[i].normal.y > 0){
                     player->grounded = 1;
                 }
-                add(&player->velocity, multiply(collisions_data[i].normal, magnitude(multiply(player->velocity, collisions_data[i].normal))));
+                
+                f32 bounce_power = magnitude(multiply(player->velocity, collisions_data[i].normal));
+                if (collisions_data[i].normal.y != 1){
+                    bounce_power *= 1.2f;
+                }
+                add(&player->velocity, multiply(collisions_data[i].normal, bounce_power));
             } break;
             
             case Pole:{
@@ -1299,7 +1317,7 @@ void draw_entities(Game *game, screen_buffer *Buffer){
                 } break;
                 case Pole:{
                     tile_entity.scale.x *= 0.2f;
-                    draw_rect(Buffer, tile_entity.position, tile_entity.scale, 0x22ff22);
+                    draw_world_rect(game, Buffer, tile_entity.position, tile_entity.scale, game->pole_gradient);
                 } break;
             }
             
@@ -1370,13 +1388,13 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         for (int j = 0; j < enemy->lines.count; j++){
             line_entity *line_arr = (line_entity *)array_get(&enemy->lines, j);
             line_entity line = *line_arr;
-            f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
+            //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
             Vector2 start_position = add(line.line.start_position, enemy->entity.position);
             Vector2 end_position = add(line.line.end_position, enemy->entity.position);
-            start_position.x += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
-            start_position.y += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
-            end_position.x += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
-            end_position.y += ((f32)(rand() % 1000) * 0.0002f) - 1.0f;
+            start_position.x += rnd(-0.5f, 0.5f);
+            start_position.y += rnd(-0.5f, 0.5f);
+            end_position.x   += rnd(-0.5f, 0.5f);
+            end_position.y   += rnd(-0.5f, 0.5f);
             draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, line.color);
         }
     }
