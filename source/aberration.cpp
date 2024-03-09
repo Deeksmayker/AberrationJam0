@@ -116,12 +116,34 @@ void draw_line(screen_buffer *Buffer, line_entity line_e){
     
 }
 
-void fill_background(screen_buffer *Buffer, u32 color){
+void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
     u8 *ROW = (u8 *) Buffer->Memory;
     for (int y = 0; y < Buffer->Height; y++){
         u32 *Pixel = (u32 *) ROW;
+        Vector2 pixel_world_position = {0, ((f32)y + game->camera_pixel_position.y) / unit_size};
+        loop_world_position(game, &pixel_world_position);
+        
+        f32 y_pixel_position = pixel_world_position.y * unit_size;
+        
+        f32 fraction = (y_pixel_position) / game->world_pixel_size.y;
+
         for (int x = 0; x < Buffer->Width; x++){
-            *Pixel++ = color;                  
+            
+            f32 reduction_power = game->im_dying_man ? 2048.0 : 4096.0;
+            
+            i32 random_value = 0;
+            
+            if (!game->im_dying_man){
+                random_value = (rnd((x & 0xFFFF) << 16 | ((i32)y_pixel_position & 0xFFFF)) + (i32)(game->time * 10)) % 128;
+                random_value -= 64;
+            } else{
+                random_value = rnd() % 128;
+            }
+            
+            f32 real_fraction = fraction + (f32)random_value  / reduction_power;
+            u32 color = lerp_gradient(gradient, real_fraction);                  
+            
+            *Pixel++ = color;
         }
         ROW += Buffer->Pitch;
     }
@@ -221,6 +243,7 @@ void InitGame(){
     global_game.top_left_world_position     = {0, (f32)global_game.tilemap.rows * global_game.tilemap.block_scale};
     global_game.bottom_right_world_position = {(f32)global_game.tilemap.columns * global_game.tilemap.block_scale, 0};
     global_game.world_size = {global_game.bottom_right_world_position.x, global_game.top_left_world_position.y};
+    global_game.world_pixel_size = multiply(global_game.world_size, unit_size);
     
     splash_buffer = (u32 **)malloc(global_game.world_size.y * unit_size * sizeof(u32 *));
     for (int i = 0; i < global_game.world_size.y * unit_size; i++){
@@ -267,7 +290,19 @@ void InitGame(){
     blood_emitter->splash_chance = 0.5f;
     blood_emitter->colliding_chance = 0.8f;
     
-    //fill_level1_tilemap(&global_game);
+    
+    u32 sunset_orange = 0xfd754d;
+    u32 sky_white = 0xefeeee;
+    u32 blue_sky = 0x98bad5;
+    
+    global_game.background_gradient = {};
+    global_game.background_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.background_gradient.colors[0] = blue_sky;
+    global_game.background_gradient.colors[1] = sky_white;
+    global_game.background_gradient.colors[2] = sunset_orange;
+    global_game.background_gradient.colors[3] = sky_white;
+    global_game.background_gradient.colors[4] = blue_sky;
+    global_game.background_gradient.colors_count = 5;
 }
 
 
@@ -287,6 +322,8 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
                                  unit_size;
                                  
     input.mouse_world_position = {mouse_world_position_x, mouse_world_position_y + camera_position.y};
+    
+    global_game.camera_pixel_position = multiply(camera_position, unit_size);
     
     f32 screen_world_height = (f32)Buffer->Height / unit_size;
     if(global_game.top_left_world_position.y - camera_position.y < screen_world_height
@@ -1063,7 +1100,7 @@ line_hits check_line_collision(Game *game, Line line){
 }
 
 void render(Game *game, screen_buffer *Buffer){
-    fill_background(Buffer, 0xffffff);
+    fill_background(game, Buffer, game->background_gradient);
     
     draw_entities(game, Buffer);
 
@@ -1207,9 +1244,8 @@ void draw_entities(Game *game, screen_buffer *Buffer){
     for  (int i = 0; i < game->fly_enemies.count; i++){ 
         fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
         
-        //enemy->entity.position.x += game->delta;
-        
-        //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0x3366aa);
+        //hit box
+        //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0xaa3344);
         
         for (int j = 0; j < enemy->lines.count; j++){
             line_entity *line_arr = (line_entity *)array_get(&enemy->lines, j);

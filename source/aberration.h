@@ -23,6 +23,11 @@ struct Entity{
     Vector2 scale;  
 };
 
+struct Gradient{
+    u32 *colors;
+    u32 colors_count;
+};
+
 struct Input{
     b32 up_key;  
     b32 down_key;
@@ -225,6 +230,8 @@ struct Game{
     Vector2 top_left_world_position;
     Vector2 bottom_right_world_position;
     Vector2 world_size;
+    Vector2 world_pixel_size;
+    Vector2 camera_pixel_position;
     Vector2 camera_player_position;
     Input input;
     f64 time;
@@ -239,7 +246,11 @@ struct Game{
     Player player;
     Tilemap tilemap;
     
+    b32 im_dying_man = 0;
+    
     particle_emitter blood_emitter;
+    
+    Gradient background_gradient;
 };
 
 global_variable Vector2 camera_position;
@@ -251,7 +262,7 @@ void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_positi
 void draw_line(screen_buffer *Buffer, Line line, u32 color);
 void draw_line(screen_buffer *Buffer, line_entity line_e); 
 
-void fill_background(screen_buffer *Buffer, u32 color);
+void fill_background(screen_buffer *Buffer, Gradient gradient);
 
 // Time, Input, Bitmap buffer, Sound buffer
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer);

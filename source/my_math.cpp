@@ -184,13 +184,24 @@ int lerp_colors(uint32_t *colors, int colors_count, float fraction){
     return lerp_color(color1, color2, t);
 }
 
+int lerp_gradient(Gradient gradient, float fraction){
+    return lerp_colors(gradient.colors, gradient.colors_count, fraction);
+}
+
 
 global_variable u32 rnd_state = 0;
 
 //lehmer
 u32 rnd(u32 state)
 {
-	return (u64)state * 48271 % 0x7fffffff;
+    state += 0xe120fc15;
+    u64 tmp;
+    tmp = (u64)state * 0x4a39b70d;
+    u32 m1 = (tmp >> 32) ^ tmp;
+    tmp = (u64)m1 * 0x12fad5c9;
+    u32 m2 = (tmp >> 32) * tmp;
+    return m2;
+	//return (u64)state * 48271 % 0x7fffffff;
 }
 
 u32 rnd()
