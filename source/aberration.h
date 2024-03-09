@@ -253,6 +253,9 @@ struct Game{
     Player player;
     Tilemap tilemap;
     
+    f32 color_change_countdown;
+    u32 current_color_palette = 0xFFFFFF;
+    
     Vector2 shake_additional_position {0, 0};
     Vector2 shake_last_additional_position {0, 0};
     Vector2 shake_max_power = {6, 6.0f};

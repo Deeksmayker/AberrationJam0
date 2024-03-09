@@ -89,6 +89,8 @@ void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector
             f32 real_fraction = get_random_fraction_from_pixel_position(game, x, y_pixel_position, fraction);
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
+            color &= game->current_color_palette;
+            
             *pixel++ = color;
         }
         row += Buffer->Pitch;
@@ -139,7 +141,7 @@ void draw_rect(screen_buffer *Buffer, f32 xPosition, f32 yPosition, f32 width, f
             if (x >= Buffer->Width || x < 0){
                 continue;
             }
-            
+                  
             *pixel++ = color;
         }
         row += Buffer->Pitch;
@@ -236,6 +238,8 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
             
             f32 real_fraction = get_random_fraction_from_pixel_position(game, x, y_pixel_position, fraction);
             u32 color = lerp_gradient(gradient, real_fraction);                  
+            
+            color &= game->current_color_palette;
             
             *Pixel++ = color;
         }
@@ -859,6 +863,9 @@ void update_fly_enemies(Game *game){
             emit_particles(game, game->blood_emitter, direction_to_player, game->player.entity.position, 1);
             shake_camera(game, 0.6f);
             
+            game->color_change_countdown = 0.05f;
+            game->current_color_palette = 0xFF8F8F;
+            
             hitstop_countdown += 0.2f;
         }
         
@@ -893,6 +900,10 @@ void update_fly_enemy_projectiles(Game *game){
             
             emit_particles(game, game->blood_emitter, projectile->direction, game->player.entity.position, 1);
             shake_camera(game, 0.6f);
+            
+            game->color_change_countdown = 0.05f;
+            game->current_color_palette = 0xFF8F8F;
+
             hitstop_countdown += 0.2f;
             
             array_remove(&game->fly_enemy_projectiles, i);
@@ -1299,6 +1310,21 @@ line_hits check_line_collision(Game *game, Line line){
 }
 
 void render(Game *game, screen_buffer *Buffer){
+    if (game->color_change_countdown > 0){
+        game->color_change_countdown -= game->delta;
+        if (game->color_change_countdown <= 0){
+            if (game->current_color_palette == 0xFF8F8F){
+                game->current_color_palette = 0x8FFF8F;
+                game->color_change_countdown = 0.05f;
+            } else if (game->current_color_palette == 0x8FFF8F){
+                game->current_color_palette = 0x8F8FFF;
+                game->color_change_countdown = 0.05f;
+            } else{
+                game->current_color_palette = 0xFFFFFF;
+            }
+        }
+    }
+
     fill_background(game, Buffer, game->background_gradient);
     
     draw_entities(game, Buffer);
