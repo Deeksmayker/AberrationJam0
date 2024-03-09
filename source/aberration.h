@@ -114,7 +114,8 @@ struct Player{
         f32 pefrect_damage = 10.0f;
         f32 damage = 4.0f;
         f32 push_force = 60;
-        b32 holding;
+        b32 holding_shot;
+        b32 holding_cleaning;
         f32 cooldown_timer;
         f32 cooldown = 0.4f;
         f32 max_holding_time = 1.0f;
@@ -130,6 +131,7 @@ struct Player{
     shooter shoot = {};
         
     particle_emitter pole_ride_emitter;
+    particle_emitter cleaning_emitter;
     
     f32 max_in_blood_time = 20;
     f32 in_blood_time;
@@ -308,6 +310,7 @@ void check_player_collisions(Game *game);
 fly_enemy *check_enemy_collision(Game *game, Entity entity);
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data);
 void calculate_particle_tilemap_collisions(Game *game, Particle *particle, collision *collisions_data);
+void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 player_to_mouse, b32 perfect_shoot);
 collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity);
 collision check_particles_collisions(Game *game, Vector2 velocity, Entity entity);
 b32 check_entity_collisions(Game *game, Entity *entity, Vector2 wish_position);

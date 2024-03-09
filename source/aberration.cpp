@@ -287,6 +287,8 @@ void add_splash(Game *game, Entity entity, u32 color){
     i32 left_pixel_position   = (i32)((entity.position.x - entity.scale.x * 0.5f) * unit_size);
     i32 right_pixel_position  = (i32)((entity.position.x + entity.scale.x * 0.5f) * unit_size);
     
+    if (color == 0xffffff) color = 0;
+    
     for (int y = bottom_pixel_position; y <= up_pixel_position; y++){
         for (int x = left_pixel_position; x <= right_pixel_position; x++){
             Vector2 world_pixel_position = {((f32)x) / unit_size , ((f32)y) / unit_size};
@@ -398,6 +400,24 @@ void InitGame(){
     blood_emitter->colliding_chance = 0.8f;
     blood_emitter->per_second = 10;
     
+    particle_emitter *cleaning_emitter = &global_game.player.cleaning_emitter;
+    *cleaning_emitter = {};
+    cleaning_emitter->count_min        = 30;
+    cleaning_emitter->count_max        = 80;
+    cleaning_emitter->speed_min        = 40;
+    cleaning_emitter->speed_max        = 150;
+    cleaning_emitter->scale_min        = 1.0f;
+    cleaning_emitter->scale_max        = 3.0f;
+    cleaning_emitter->lifetime_min     = 1.0f;
+    cleaning_emitter->lifetime_max     = 2.0f;
+    cleaning_emitter->color            = 0xffffff;
+    cleaning_emitter->spread           = 0.4f;
+    cleaning_emitter->shape            = (particle_shape)0;
+    cleaning_emitter->try_splash       = 1;
+    cleaning_emitter->splash_chance    = 0.8f;
+    cleaning_emitter->colliding_chance = 1.0f;
+    cleaning_emitter->per_second       = 10;
+    
     
     u32 sunset_orange = 0xfd754d;
     u32 sky_white = 0xefeeee;
@@ -507,12 +527,13 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
         while(delta > frame_time){
             if (hitstop_countdown > 0){
                 hitstop_countdown -= frame_time;
+                delta -= 0.001f;
                 global_game.delta = 0.001f;
             } else{
                 global_game.delta = frame_time;
+                delta -= frame_time;
             }
             update(&global_game);
-            delta -= frame_time;
         }
         
         previous_delta = delta;
@@ -521,8 +542,10 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     if (hitstop_countdown > 0){
         hitstop_countdown -= delta;
         global_game.delta = 0.001f;
+        delta -= 0.001f;
     } else{
         global_game.delta = delta;
+        delta -= delta;
     }
     
     update(&global_game);
@@ -598,7 +621,7 @@ void update_player(Game *game){
         
         game->player.velocity.x += horizontal * game->player.jump_speed_boost;
     }
-    
+    /*
     if (game->player.melee_cooldown_timer > 0){
         game->player.melee_cooldown_timer -= game->delta;
     }
@@ -606,9 +629,9 @@ void update_player(Game *game){
     if (game->input.mouse_right_key && player->melee_cooldown_timer <= 0){
         player->melee_cooldown_timer = 0.5f;
         Vector2 direction = subtract(game->input.mouse_world_position, player->entity.position);
-        emit_particles(game, player->shoot.wall_hit_emitter, direction, player->entity.position, 1.0f);
+        emit_particles(game, player->cleaning_emitter, direction, player->entity.position, 1.0f);
     }
-    
+    */
     //shoot logic
     Player::shooter *shoot = &player->shoot;
     Vector2 player_to_mouse = subtract(game->input.mouse_world_position, game->camera_player_position);
@@ -623,8 +646,9 @@ void update_player(Game *game){
     }
     
     //charging
-    if (game->input.mouse_left_key){
-        shoot->holding = 1;
+    if (game->input.mouse_left_key || game->input.mouse_right_key){
+        shoot->holding_shot     = game->input.mouse_left_key;
+        shoot->holding_cleaning = game->input.mouse_right_key;
         shoot->holding_timer += game->delta;
         
         if (shoot->holding_timer >= shoot->perfect_hold_time && !shoot->perfect_charged){
@@ -634,8 +658,12 @@ void update_player(Game *game){
             
         }
         //shooting
-    } else if (shoot->holding && player->shoot.cooldown_timer <= 0){
-        shoot->holding = 0;
+    } else if ((shoot->holding_shot || shoot->holding_cleaning) && player->shoot.cooldown_timer <= 0){
+        b32 shooting = shoot->holding_shot;
+        b32 cleaning = shoot->holding_cleaning;
+    
+        shoot->holding_shot = 0;
+        shoot->holding_cleaning = 0;
         shoot->perfect_charged = 0;
         
         b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
@@ -645,84 +673,11 @@ void update_player(Game *game){
         player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
         
         shoot->holding_timer = 0;
-    
-        f32 shoot_length = perfect_shoot ? 250 : 40;
         
-        //recoil
-        Vector2 recoil_direction = multiply(player_to_mouse, -1);
-        
-        if (player->velocity.x * recoil_direction.x < 0){
-            player->velocity.x = 0;
-        }
-        if (player->velocity.y * recoil_direction.y < 0){
-            player->velocity.y = 0;
-        }
-        add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
-        
-        Vector2 end_point = add(player->entity.position, multiply(player_to_mouse, shoot_length));
-        Line line = {};
-        line.start_position = player->entity.position;
-        line.end_position   = end_point;
-        line.start_width = perfect_shoot ? 5.0f : 2.0f;
-        line.end_width = line.start_width;
-        
-        shake_camera(game, perfect_shoot ? 0.5f : 0.1f);
-        
-        //shoot line render
-        line_entity visual_line = {};
-        visual_line.line = line;
-        visual_line.line.start_width = perfect_shoot ? 2.0f : 1.0f;
-        visual_line.line.end_width = 0.5f;
-        visual_line.color = perfect_shoot ? 0xbf212f : 0xf9a73e;
-        visual_line.max_lifetime = perfect_shoot ? 0.4f : 0.2f;
-        
-        array_add(&game->line_entities, &visual_line);
-        
-        //@TODO: Free this hits
-        line_hits hits = check_line_collision(game, line);
-        int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
-        
-        for (int i = 0; i < collision_count; i++){
-            particle_emitter *hit_emitter;
-            if (hits.hit_types[i] == 2){
-                hit_emitter = &game->blood_emitter;
-            } else{
-                hit_emitter = &player->shoot.wall_hit_emitter;
-            }
-        
-            if (hits.enter_count > i){
-                emit_particles(game, *hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
-            }
-            if (hits.exit_count > i){
-                emit_particles(game, *hit_emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
-            }
-            
-            if (hits.enter_count > i && hits.exit_count > i){
-                //bullet line in tiles
-                Line wall_line = {};
-                wall_line.start_position = hits.enter_positions[i];
-                wall_line.end_position   = hits.exit_positions[i];
-                wall_line.start_width = 0.01f;
-                wall_line.end_width = 0.01f;
-                
-                line_entity wall_visual_line = {};
-                wall_visual_line.line = wall_line;
-                wall_visual_line.max_lifetime = 0;
-                
-                if (hits.hit_types[i] == 1){
-                    wall_visual_line.color = 0xffffff;
-                    array_add(&game->line_entities, &wall_visual_line);
-                } else if (hits.hit_types[i] == 2){
-                    //hit enemy
-                    wall_visual_line.color = 0xcc3333;
-                    subtract(&wall_visual_line.line.start_position, hits.enemy_hits[i]->entity.position);
-                    subtract(&wall_visual_line.line.end_position, hits.enemy_hits[i]->entity.position);
-                    array_add(&hits.enemy_hits[i]->lines, &wall_visual_line);
-                    
-                    hitstop_countdown += 0.1f;
-                    shake_camera(game, 0.1f);
-                }
-            }
+        if (shooting){
+            shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
+        } else{
+            emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.1f);
         }
     } else{
         shoot->holding_timer = 0;
@@ -733,6 +688,89 @@ void update_player(Game *game){
     check_player_collisions(game);
     //printf("%d\n", (int)game->player.velocity.x);
 }
+
+void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 player_to_mouse, b32 perfect_shoot){
+    //recoil
+    Vector2 recoil_direction = multiply(player_to_mouse, -1);
+    
+    if (player->velocity.x * recoil_direction.x < 0){
+        player->velocity.x = 0;
+    }
+    if (player->velocity.y * recoil_direction.y < 0){
+        player->velocity.y = 0;
+    }
+    add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
+
+
+    f32 shoot_length = perfect_shoot ? 250 : 40;
+    
+    Vector2 end_point = add(player->entity.position, multiply(player_to_mouse, shoot_length));
+    Line line = {};
+    line.start_position = player->entity.position;
+    line.end_position   = end_point;
+    line.start_width = perfect_shoot ? 5.0f : 2.0f;
+    line.end_width = line.start_width;
+    
+    shake_camera(game, perfect_shoot ? 0.5f : 0.1f);
+    
+    //shoot line render
+    line_entity visual_line = {};
+    visual_line.line = line;
+    visual_line.line.start_width = perfect_shoot ? 2.0f : 1.0f;
+    visual_line.line.end_width = 0.5f;
+    visual_line.color = perfect_shoot ? 0xbf212f : 0xf9a73e;
+    visual_line.max_lifetime = perfect_shoot ? 0.4f : 0.2f;
+    
+    array_add(&game->line_entities, &visual_line);
+    
+    //@TODO: Free this hits
+    line_hits hits = check_line_collision(game, line);
+    int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
+    
+    for (int i = 0; i < collision_count; i++){
+        particle_emitter *hit_emitter;
+        if (hits.hit_types[i] == 2){
+            hit_emitter = &game->blood_emitter;
+        } else{
+            hit_emitter = &player->shoot.wall_hit_emitter;
+        }
+    
+        if (hits.enter_count > i){
+            emit_particles(game, *hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
+        }
+        if (hits.exit_count > i){
+            emit_particles(game, *hit_emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
+        }
+        
+        if (hits.enter_count > i && hits.exit_count > i){
+            //bullet line in tiles
+            Line wall_line = {};
+            wall_line.start_position = hits.enter_positions[i];
+            wall_line.end_position   = hits.exit_positions[i];
+            wall_line.start_width = 0.01f;
+            wall_line.end_width = 0.01f;
+            
+            line_entity wall_visual_line = {};
+            wall_visual_line.line = wall_line;
+            wall_visual_line.max_lifetime = 0;
+            
+            if (hits.hit_types[i] == 1){
+                wall_visual_line.color = 0xffffff;
+                array_add(&game->line_entities, &wall_visual_line);
+            } else if (hits.hit_types[i] == 2){
+                //hit enemy
+                wall_visual_line.color = 0xcc3333;
+                subtract(&wall_visual_line.line.start_position, hits.enemy_hits[i]->entity.position);
+                subtract(&wall_visual_line.line.end_position, hits.enemy_hits[i]->entity.position);
+                array_add(&hits.enemy_hits[i]->lines, &wall_visual_line);
+                
+                hitstop_countdown += 0.1f;
+                shake_camera(game, 0.1f);
+            }
+        }
+    }
+}
+
 
 void update_fly_enemies(Game *game){
     for (int i = 0; i < game->fly_enemies.count; i++){
@@ -1349,7 +1387,7 @@ void render(Game *game, screen_buffer *Buffer){
     //Draw Rifle
     local_persist f32 length_multiplier = 1.0f; 
     Player::shooter *shoot = &player->shoot;
-    if (shoot->holding){
+    if (shoot->holding_shot || shoot->holding_cleaning){
         f32 perfect_length_multiplier = 2.0f;
         f32 max_length_multiplier = 2.2f;
         
