@@ -390,6 +390,7 @@ void InitGame(){
     blood_emitter->try_splash = 1;
     blood_emitter->splash_chance = 0.5f;
     blood_emitter->colliding_chance = 0.8f;
+    blood_emitter->per_second = 10;
     
     
     u32 sunset_orange = 0xfd754d;
@@ -443,6 +444,18 @@ void InitGame(){
     global_game.pole_gradient.colors[3] = bamboo_green;
     global_game.pole_gradient.colors[4] = pale_green;
     global_game.pole_gradient.colors_count = 5;
+    
+    u32 pale_pink = 0xfadadd;
+    u32 violet = 0xbf8bff;
+    
+    global_game.fly_enemies_gradient = {};
+    global_game.fly_enemies_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.fly_enemies_gradient.colors[0] = blood_dark;
+    global_game.fly_enemies_gradient.colors[1] = violet;
+    global_game.fly_enemies_gradient.colors[2] = pale_pink;
+    global_game.fly_enemies_gradient.colors[3] = violet;
+    global_game.fly_enemies_gradient.colors[4] = blood_dark;
+    global_game.fly_enemies_gradient.colors_count = 5;
 }
 
 
@@ -523,9 +536,9 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
 }
 
 void update(Game *game){
+    update_player(game);
     update_fly_enemies(game);
     update_fly_enemy_projectiles(game);
-    update_player(game);
     update_particles(game);
     update_camera_shake(game);
     debug_update(game);
@@ -723,6 +736,17 @@ void update_fly_enemies(Game *game){
         Vector2 direction_to_player = normalized(vector_to_player);
         f32 distance_to_player = magnitude(vector_to_player);
         
+        if (in_blood(fly->entity)){
+            fly->time_in_blood += game->delta;
+            fly->in_blood_progress = clamp01(fly->time_in_blood / fly->max_time_in_blood);
+        }
+        
+        //blood progress multipliers
+        update_overtime_emitter(game, &game->blood_emitter, {0, 1}, fly->entity.position, fly->in_blood_progress);
+        fly->charge_duration = lerp(fly->start_charge_duration, fly->start_charge_duration * 0.5f, fly->in_blood_progress);
+        fly->strafe_duration = lerp(fly->start_strafe_duration, fly->start_strafe_duration * 0.5f, fly->in_blood_progress);
+        fly->circle_speed = lerp(fly->start_circle_speed, fly->start_circle_speed * 3.0f, fly->in_blood_progress);
+        
         if (fly->charging){
             fly->charge_timer += game->delta;
             
@@ -837,6 +861,8 @@ void update_fly_enemies(Game *game){
             
             hitstop_countdown += 0.2f;
         }
+        
+        loop_world_position(game, &fly->entity.position);
     }
 }
 
@@ -1017,7 +1043,7 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                     player->riding_pole = 1;
                     shake_camera(game, game->delta * 0.3f);
                     
-                    update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position);
+                    update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position, 1);
                 }
             } break;
         }
@@ -1438,7 +1464,9 @@ void draw_entities(Game *game, screen_buffer *Buffer){
             start_position.y += rnd(-0.5f, 0.5f);
             end_position.x   += rnd(-0.5f, 0.5f);
             end_position.y   += rnd(-0.5f, 0.5f);
-            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, line.color);
+            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
+            //draw_line_gradient(game, Buffer, start_position.x, start_position.y, end_position.x, end_position.y, line.visual_start_width, line.visual_end_width, game->fly_enemies_gradient);
+            
         }
     }
     
@@ -1462,9 +1490,9 @@ void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vec
     }
 }
 
-void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position){
+void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){
     emitter->emitting_timer += game->delta;
-    f32 emit_delay = 1.0f / emitter->per_second;
+    f32 emit_delay = 1.0f / (emitter->per_second * count_multiplier);
     while (emitter->emitting_timer >= emit_delay){
         emitter->emitting_timer -= emit_delay;
         shoot_particle(game, *emitter, direction, start_position);

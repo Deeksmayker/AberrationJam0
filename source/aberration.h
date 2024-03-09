@@ -178,12 +178,14 @@ struct fly_enemy{
     
     b32 charging;
     f32 charge_duration = 2;
+    f32 start_charge_duration = 2;
     f32 charge_timer;
     Vector2 charge_end_position;
     
     b32 strafing = 1;
     b32 picked_strafe_position;
     f32 strafe_duration = 2.0f;
+    f32 start_strafe_duration = 2.0f;
     f32 strafe_distance = 40;
     f32 strafe_t;
     Vector2 strafe_start_position;
@@ -193,10 +195,15 @@ struct fly_enemy{
     
     b32 circling;
     f32 circle_speed = 5;
+    f32 start_circle_speed = 5;
     f32 circle_radius = 15;
     f32 circle_angle;
     Vector2 circle_origin;
     f32 circling_time;
+    
+    f32 time_in_blood;
+    f32 max_time_in_blood = 10;
+    f32 in_blood_progress;
     
     Array lines;
     
@@ -255,11 +262,13 @@ struct Game{
     b32 im_dying_man = 0;
     
     particle_emitter blood_emitter;
+    particle_emitter dust_emitter;
     
     Gradient background_gradient;
     Gradient tiles_gradient;
     Gradient blood_gradient;
     Gradient pole_gradient;
+    Gradient fly_enemies_gradient;
 };
 
 global_variable Vector2 camera_position;
@@ -308,7 +317,7 @@ void debug_update(Game *game);
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
 
-void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position);
+void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position);
 
