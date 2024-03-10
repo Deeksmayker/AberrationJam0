@@ -335,7 +335,7 @@ void InitGame(){
     global_game.fly_enemies = array_init(sizeof(fly_enemy), 100000);
     global_game.fly_enemy_projectiles = array_init(sizeof(fly_enemy_projectile), 100000);
     
-    add_fly_enemy(&global_game, {30, 35});
+    //add_fly_enemy(&global_game, {30, 35});
     
     /*
     global_game.walls = array_init(sizeof(Entity));
@@ -577,6 +577,8 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     rand_seed = (u32)(global_game.delta * 10000000000.0f);
     rnd_state = rand_seed;
     
+    global_game.camera_screen_world_size = {Buffer->Width / unit_size, Buffer->Height / unit_size};
+    
     f32 mouse_world_position_x = ((f32)input.mouse_screen_position.x /
                                  ((f32)Buffer->ScreenWidth / (f32)Buffer->Width)) / 
                                  unit_size;
@@ -648,6 +650,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
 }
 
 void update(Game *game){
+    update_enemies_spawn(game);
     update_player(game);
     update_fly_enemies(game);
     update_fly_enemy_projectiles(game);
@@ -661,6 +664,25 @@ void update(Game *game){
     loop_world_position(game, &game->player.entity.position);
     
     //camera_position = game->player.entity.position;
+}
+
+void update_enemies_spawn(Game *game){
+    if (current_spawn_index >= SPAWN_COUNT){
+        return;
+    }
+
+    if (game->time >= spawns[current_spawn_index].spawn_time){
+        for (int i = 0; i < spawns[current_spawn_index].fly_enemies_count; i++){
+            b32 spawn_up = rnd() % 256 < 128;
+            f32 x_position = rnd(0.0f, game->world_size.x);
+            f32 y_position = get_camera_position().y + rnd(game->camera_screen_world_size.y * 0.6f,
+                                                           game->camera_screen_world_size.y * 1.1f);
+            Vector2 position = {x_position, y_position};
+            
+            add_fly_enemy(game, position);
+        }
+        current_spawn_index++;
+    }
 }
 
 void update_player(Game *game){
@@ -763,14 +785,13 @@ void update_player(Game *game){
         shoot->holding_cleaning = 0;
         shoot->perfect_charged = 0;
         
+        f32 current_perfect_buffer = shooting ? shoot->perfect_buffer : (shoot->perfect_buffer * 0.25f);
+        
         b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
-                         && shoot->holding_timer <= (shoot->perfect_hold_time + shoot->perfect_buffer);
+                         && shoot->holding_timer <= (shoot->perfect_hold_time + current_perfect_buffer);
                          
         shoot->just_shoot = perfect_shoot ? 2 : 1;
         player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
-        if (cleaning){
-            player->shoot.cooldown_timer = 1;
-        }
         
         shoot->holding_timer = 0;
         
@@ -791,7 +812,7 @@ void update_player(Game *game){
         if (shooting){
             shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
         } else{
-            emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.1f);
+            emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.05f);
         }
     } else{
         shoot->holding_timer = 0;
@@ -1118,6 +1139,8 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
 }
 
 void add_fly_enemy(Game *game, Vector2 position){
+    loop_world_position(game, &position);
+
     fly_enemy enemy = {};
     enemy.entity.position = position;
     enemy.entity.scale = {4, 5};
@@ -1179,17 +1202,21 @@ void check_player_collisions(Game *game){
     
     if (in_blood(game->player.entity)){
         game->player.in_blood_time += game->delta;
+        
+        game->player.not_in_blood_time = 0;
         //shake_camera(game, game->delta);
         game->im_dying_man = 1;
     } else{
         game->player.not_in_blood_time += game->delta;
         game->im_dying_man = 0;
-        if (game->player.not_in_blood_time > 2){
+        if (game->player.not_in_blood_time > 5){
             game->player.in_blood_time -= game->delta;
         }
     }
     
-    game->player.in_blood_progress = clamp01(lerp(0.0f, 1.0f, game->player.in_blood_time / game->player.max_in_blood_time)); 
+    clamp(&game->player.in_blood_time, 0, game->player.max_in_blood_time);
+    
+    game->player.in_blood_progress = game->player.in_blood_time / game->player.max_in_blood_time; 
 }
 
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data){

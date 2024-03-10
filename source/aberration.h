@@ -144,6 +144,17 @@ struct Player{
     f32 not_in_blood_time;
 };
 
+struct spawn_data{
+    f32 spawn_time;   
+    i32 fly_enemies_count;
+};
+
+global_variable int SPAWN_COUNT = 6;
+global_variable int current_spawn_index = 0;
+spawn_data spawns[6] = {
+    {5, 1}, {15, 2}, {30, 3}, {50, 2}, {70, 2}, {100, 3}
+};
+
 enum TileType{
     None = 0,  
     Ground = 1,
@@ -186,7 +197,7 @@ struct fly_enemy_projectile{
 
 struct fly_enemy{
     Entity entity;  
-    f32 hp = 10.0f;
+    f32 hp = 12.0f;
     b32 render_dead;
     
     b32 charging;
@@ -253,6 +264,7 @@ struct Game{
     Vector2 world_pixel_size;
     Vector2 camera_pixel_position;
     Vector2 camera_player_position;
+    Vector2 camera_screen_world_size;
     Input input;
     f64 time;
     f32 delta;
@@ -307,6 +319,7 @@ void fill_background(screen_buffer *Buffer, Gradient gradient);
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer);
 void update(Game *game);
 void update_player(Game *game);
+void update_enemies_spawn(Game *game);
 void update_fly_enemies(Game *game);
 void update_fly_enemy_projectiles(Game *game);
 void spawn_fly_enemy_projectile(Game *game, Vector2 direction, Vector2 start_position);
