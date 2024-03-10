@@ -696,7 +696,7 @@ void update_player(Game *game){
             }
             
             f32 speed_progress = abs(game->player.velocity.x) * 0.01f;
-            update_overtime_emitter(game, &game->dust_emitter, dust_particles_direction, subtract(player->entity.position, {0, -2}), lerp(1.0f, 10.0f, speed_progress)); 
+            update_overtime_emitter(game, &game->dust_emitter, dust_particles_direction, subtract(player->entity.position, {0, 1}), lerp(1.0f, 10.0f, speed_progress)); 
         }
     }
     
@@ -715,6 +715,8 @@ void update_player(Game *game){
         game->player.velocity.y += game->player.jump_force;
         
         game->player.velocity.x += horizontal * game->player.jump_speed_boost;
+        
+        emit_particles(game, game->dust_emitter, {horizontal, 1}, subtract(player->entity.position, {0, 1}), 3);
     }
     /*
     if (game->player.melee_cooldown_timer > 0){
