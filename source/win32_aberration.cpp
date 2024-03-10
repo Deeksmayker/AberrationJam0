@@ -22,8 +22,9 @@ typedef u32 b32;
 typedef float  f32;
 typedef double f64;
 
-global_variable int game_width_pixels = 960;
-global_variable int game_height_pixels = 540;
+//previous - 960x540
+global_variable int game_width_pixels = 640;
+global_variable int game_height_pixels = 360;
 
 #include "aberration.cpp"
 

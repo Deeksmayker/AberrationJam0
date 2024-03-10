@@ -7,10 +7,11 @@
 #endif
 
 //6 at 1280x720
-#define UNIT_SIZE 4.5f;
+//4.5 at 960x540
+#define UNIT_SIZE 3.0f;
 
 global_variable int collisions_count = 8;
-global_variable f32 unit_size = 4.5f;
+global_variable f32 unit_size = 3.0f;
 global_variable u32 **splash_buffer;//[1080][972];
 
 struct Vector2{

@@ -519,6 +519,8 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     
     f32 frame_time = 0.0166666f;
     
+    f32 real_delta = delta;
+    
     delta += previous_delta;
     previous_delta = 0;
     
@@ -537,18 +539,15 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
         }
         
         previous_delta = delta;
-    } 
-    
-    if (hitstop_countdown > 0){
-        hitstop_countdown -= delta;
-        global_game.delta = 0.001f;
-        delta -= 0.001f;
-    } else{
-        global_game.delta = delta;
-        delta -= delta;
+    }  else{
+        if (hitstop_countdown > 0){
+            hitstop_countdown -= delta;
+            global_game.delta = 0.001f;
+        } else{
+            global_game.delta = delta;
+        }
+        update(&global_game);
     }
-    
-    update(&global_game);
     
     f32 screen_center = (Buffer->ScreenHeight / unit_size) * 0.5f;
     f32 additional_vertical_position = (input.mouse_screen_position.y / unit_size) - screen_center;
@@ -560,7 +559,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 10);
     loop_world_position(&global_game, &camera_position);
 
-    
+    global_game.delta = real_delta;
     render(&global_game, Buffer);
 }
 
@@ -674,6 +673,20 @@ void update_player(Game *game){
         
         shoot->holding_timer = 0;
         
+        //recoil
+        Vector2 recoil_direction = multiply(player_to_mouse, -1);
+        
+        if (shooting){
+            if (player->velocity.x * recoil_direction.x < 0){
+                player->velocity.x = 0;
+            }
+            if (player->velocity.y * recoil_direction.y < 0){
+                player->velocity.y = 0;
+            }
+        }
+        add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
+
+        
         if (shooting){
             shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
         } else{
@@ -690,18 +703,6 @@ void update_player(Game *game){
 }
 
 void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 player_to_mouse, b32 perfect_shoot){
-    //recoil
-    Vector2 recoil_direction = multiply(player_to_mouse, -1);
-    
-    if (player->velocity.x * recoil_direction.x < 0){
-        player->velocity.x = 0;
-    }
-    if (player->velocity.y * recoil_direction.y < 0){
-        player->velocity.y = 0;
-    }
-    add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
-
-
     f32 shoot_length = perfect_shoot ? 250 : 40;
     
     Vector2 end_point = add(player->entity.position, multiply(player_to_mouse, shoot_length));
@@ -907,6 +908,7 @@ void update_fly_enemies(Game *game){
             game->current_color_palette = 0xFF8F8F;
             
             hitstop_countdown += 0.2f;
+            clamp(&hitstop_countdown, 0, 1);
         }
         
         loop_world_position(game, &fly->entity.position);
@@ -1065,8 +1067,10 @@ void check_player_collisions(Game *game){
     if (in_blood(game->player.entity)){
         game->player.in_blood_time += game->delta;
         //shake_camera(game, game->delta);
+        game->im_dying_man = 1;
     } else{
         game->player.not_in_blood_time += game->delta;
+        game->im_dying_man = 0;
         if (game->player.not_in_blood_time > 2){
             game->player.in_blood_time -= game->delta;
         }
