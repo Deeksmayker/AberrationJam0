@@ -184,6 +184,18 @@ struct line_entity{
     b32 die_after_drawing;
 };
 
+struct Enemy{
+    Entity entity;  
+    f32 hp = 12.0f;
+    b32 render_dead;
+    
+    f32 time_in_blood;
+    f32 max_time_in_blood = 10;
+    f32 in_blood_progress;
+    
+    Array lines;
+};
+
 struct fly_enemy_projectile{
     Entity entity;
     line_entity line_render;  
@@ -196,10 +208,8 @@ struct fly_enemy_projectile{
 
 
 struct fly_enemy{
-    Entity entity;  
-    f32 hp = 12.0f;
-    b32 render_dead;
-    
+    Enemy enemy;
+
     b32 charging;
     f32 charge_duration = 2;
     f32 start_charge_duration = 2;
@@ -224,14 +234,10 @@ struct fly_enemy{
     f32 circle_angle;
     Vector2 circle_origin;
     f32 circling_time;
-    
-    f32 time_in_blood;
-    f32 max_time_in_blood = 10;
-    f32 in_blood_progress;
-    
-    Array lines;
-    
-    particle_emitter hit_emitter;
+};
+
+struct blocker_enemy{
+    Enemy enemy;  
 };
 
 struct line_hits{
@@ -242,7 +248,7 @@ struct line_hits{
     Vector2 *exit_positions;
     //1 - tile, 2 - enemy
     i32 *hit_types;
-    fly_enemy **enemy_hits;
+    Enemy **enemy_hits;
 };
 
 struct collision{
@@ -274,6 +280,7 @@ struct Game{
     Array particles;
     Array line_entities;
     Array fly_enemies;
+    Array blocker_enemies;
     Array fly_enemy_projectiles;
     Player player;
     Tilemap tilemap;
@@ -327,7 +334,7 @@ void update_particles(Game *game);
 void accelerate(Vector2 *velocity, f32 delta, f32 base_speed, f32 wish_speed, int direction, f32 acceleration);
 void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction);
 void check_player_collisions(Game *game);
-fly_enemy *check_enemy_collision(Game *game, Entity entity);
+Enemy *check_enemy_collision(Game *game, Entity entity);
 void calculate_player_tilemap_collisions(Game *game, collision *collisions_data);
 void calculate_particle_tilemap_collisions(Game *game, Particle *particle, collision *collisions_data);
 void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 player_to_mouse, b32 perfect_shoot);
@@ -347,6 +354,7 @@ void debug_update(Game *game);
 
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
+void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy);
 
 void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);

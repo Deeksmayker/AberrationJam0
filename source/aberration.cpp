@@ -335,6 +335,8 @@ void InitGame(){
     global_game.fly_enemies = array_init(sizeof(fly_enemy), 100000);
     global_game.fly_enemy_projectiles = array_init(sizeof(fly_enemy_projectile), 100000);
     
+    global_game.blocker_enemies = array_init(sizeof(blocker_enemy), 100000);
+    
     //add_fly_enemy(&global_game, {30, 35});
     
     /*
@@ -805,8 +807,9 @@ void update_player(Game *game){
             if (player->velocity.y * recoil_direction.y < 0){
                 player->velocity.y = 0;
             }
+            
+            add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
         }
-        add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
 
         
         if (shooting){
@@ -906,25 +909,25 @@ void update_fly_enemies(Game *game){
     for (int i = 0; i < game->fly_enemies.count; i++){
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
         
-        if (fly->hp <= 0){
+        if (fly->enemy.hp <= 0){
             //array_remove(&game->fly_enemies, i);
             continue;
         }
         
-        Vector2 vector_to_player = subtract(game->player.entity.position, fly->entity.position);
+        Vector2 vector_to_player = subtract(game->player.entity.position, fly->enemy.entity.position);
         Vector2 direction_to_player = normalized(vector_to_player);
         f32 distance_to_player = magnitude(vector_to_player);
         
-        if (in_blood(fly->entity)){
-            fly->time_in_blood += game->delta;
-            fly->in_blood_progress = clamp01(fly->time_in_blood / fly->max_time_in_blood);
+        if (in_blood(fly->enemy.entity)){
+            fly->enemy.time_in_blood += game->delta;
+            fly->enemy.in_blood_progress = clamp01(fly->enemy.time_in_blood / fly->enemy.max_time_in_blood);
         }
         
         //blood progress multipliers
-        update_overtime_emitter(game, &game->blood_emitter, {0, 1}, fly->entity.position, fly->in_blood_progress);
-        fly->charge_duration = lerp(fly->start_charge_duration, fly->start_charge_duration * 0.5f, fly->in_blood_progress);
-        fly->strafe_duration = lerp(fly->start_strafe_duration, fly->start_strafe_duration * 0.5f, fly->in_blood_progress);
-        fly->circle_speed = lerp(fly->start_circle_speed, fly->start_circle_speed * 3.0f, fly->in_blood_progress);
+        update_overtime_emitter(game, &game->blood_emitter, {0, 1}, fly->enemy.entity.position, fly->enemy.in_blood_progress);
+        fly->charge_duration = lerp(fly->start_charge_duration, fly->start_charge_duration * 0.5f, fly->enemy.in_blood_progress);
+        fly->strafe_duration = lerp(fly->start_strafe_duration, fly->start_strafe_duration * 0.5f, fly->enemy.in_blood_progress);
+        fly->circle_speed = lerp(fly->start_circle_speed, fly->start_circle_speed * 3.0f, fly->enemy.in_blood_progress);
         
         if (fly->charging){
             fly->charge_timer += game->delta;
@@ -934,10 +937,10 @@ void update_fly_enemies(Game *game){
             
             line_entity charge_line = {};
             charge_line.line = {};
-            charge_line.line.start_position = fly->entity.position;
+            charge_line.line.start_position = fly->enemy.entity.position;
             
             if (charge_progress < 0.8f){
-                fly->charge_end_position = add(fly->entity.position, multiply(direction_to_player, distance_to_player * 1.3f));
+                fly->charge_end_position = add(fly->enemy.entity.position, multiply(direction_to_player, distance_to_player * 1.3f));
             }
             
             charge_line.line.end_position = fly->charge_end_position;
@@ -957,7 +960,7 @@ void update_fly_enemies(Game *game){
                 fly->charging = 0;
                 fly->strafing = 1;
                 
-                fly->strafe_start_position = fly->entity.position;
+                fly->strafe_start_position = fly->enemy.entity.position;
                 fly->strafe_target_position = fly->charge_end_position;
                 fly->picked_strafe_position = 1;
             }
@@ -975,8 +978,8 @@ void update_fly_enemies(Game *game){
                          normalize(direction_to_player.y) * 1};
                 normalize(&strafe_direction);
             
-                fly->strafe_start_position = fly->entity.position;
-                fly->strafe_target_position = add(fly->entity.position, multiply(strafe_direction, fly->strafe_distance));
+                fly->strafe_start_position = fly->enemy.entity.position;
+                fly->strafe_target_position = add(fly->enemy.entity.position, multiply(strafe_direction, fly->strafe_distance));
                 fly->picked_strafe_position = 1;
             }
         }
@@ -985,7 +988,7 @@ void update_fly_enemies(Game *game){
         if (fly->strafing){
             fly->strafe_t += game->delta / fly->strafe_duration;
             
-            fly->entity.position = lerp(fly->strafe_start_position, fly->strafe_target_position, EaseOutElastic(fly->strafe_t));
+            fly->enemy.entity.position = lerp(fly->strafe_start_position, fly->strafe_target_position, EaseOutElastic(fly->strafe_t));
             
             if (fly->strafe_t >= 1){
                 fly->strafe_t = 0;
@@ -1002,16 +1005,16 @@ void update_fly_enemies(Game *game){
         
         if (fly->circling){
             if (fly->circling_time <= 0){
-                fly->circle_origin = fly->entity.position;
+                fly->circle_origin = fly->enemy.entity.position;
             }
         
             fly->circling_time += game->delta;
         
             fly->circle_angle += game->delta * fly->circle_speed;
-            fly->entity.position.x = lerp(fly->entity.position.x,
+            fly->enemy.entity.position.x = lerp(fly->enemy.entity.position.x,
                                           fly->circle_origin.x + fly->circle_radius * cos(fly->circle_angle),
                                           game->delta * 10);
-            fly->entity.position.y = lerp(fly->entity.position.y,
+            fly->enemy.entity.position.y = lerp(fly->enemy.entity.position.y,
                                           fly->circle_origin.y + fly->circle_radius * sin(fly->circle_angle),
                                           game->delta * 10);
                                           
@@ -1025,14 +1028,14 @@ void update_fly_enemies(Game *game){
                 if (will_shoot){
                     fly->strafing = 1;
                     
-                    spawn_fly_enemy_projectile(game, direction_to_player, fly->entity.position);
+                    spawn_fly_enemy_projectile(game, direction_to_player, fly->enemy.entity.position);
                 } else{
                     fly->charging = 1;
                 }
             }
         }
         
-        if (check_box_collision(&fly->entity, &game->player.entity)){
+        if (check_box_collision(&fly->enemy.entity, &game->player.entity)){
             //Enemy hit player
             game->player.velocity.y += 60;
             emit_particles(game, game->blood_emitter, direction_to_player, game->player.entity.position, 1);
@@ -1045,7 +1048,7 @@ void update_fly_enemies(Game *game){
             clamp(&hitstop_countdown, 0, 1);
         }
         
-        loop_world_position(game, &fly->entity.position);
+        loop_world_position(game, &fly->enemy.entity.position);
     }
 }
 
@@ -1141,11 +1144,11 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
 void add_fly_enemy(Game *game, Vector2 position){
     loop_world_position(game, &position);
 
-    fly_enemy enemy = {};
-    enemy.entity.position = position;
-    enemy.entity.scale = {4, 5};
+    fly_enemy fly = {};
+    fly.enemy.entity.position = position;
+    fly.enemy.entity.scale = {4, 5};
     
-    enemy.lines = array_init(sizeof(line_entity), 100);
+    fly.enemy.lines = array_init(sizeof(line_entity), 100);
     
     line_entity triangle_line_1 = {};
     triangle_line_1.line = {};
@@ -1184,14 +1187,14 @@ void add_fly_enemy(Game *game, Vector2 position){
     right_wing_line.visual_start_width = 0.3f;
     right_wing_line.visual_end_width = 2;
     
-    array_add(&enemy.lines, &triangle_line_1);
-    array_add(&enemy.lines, &triangle_line_2);
-    array_add(&enemy.lines, &triangle_line_3);
-    array_add(&enemy.lines, &triangle_line_4);
-    array_add(&enemy.lines, &left_wing_line);
-    array_add(&enemy.lines, &right_wing_line);
+    array_add(&fly.enemy.lines, &triangle_line_1);
+    array_add(&fly.enemy.lines, &triangle_line_2);
+    array_add(&fly.enemy.lines, &triangle_line_3);
+    array_add(&fly.enemy.lines, &triangle_line_4);
+    array_add(&fly.enemy.lines, &left_wing_line);
+    array_add(&fly.enemy.lines, &right_wing_line);
     
-    array_add(&global_game.fly_enemies, &enemy);
+    array_add(&global_game.fly_enemies, &fly);
 }
 
 
@@ -1362,14 +1365,23 @@ collision *check_tilemap_collisions(Game *game, Vector2 velocity, Entity entity)
     return collisions_data;
 }
 
-fly_enemy *check_enemy_collision(Game *game, Entity entity){
+Enemy *check_enemy_collision(Game *game, Entity entity){
     for (int i = 0; i < game->fly_enemies.count; i++){
-        fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
+        fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
         
-        if (check_box_collision(&entity, &enemy->entity)){
-            return enemy;
+        if (check_box_collision(&entity, &fly->enemy.entity)){
+            return &fly->enemy;
         }
     }
+    
+    for (int i = 0; i < game->blocker_enemies.count; i++){
+        blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
+        
+        if (check_box_collision(&entity, &blocker->enemy.entity)){
+            return &blocker->enemy;
+        }
+    }
+
     
     return 0;
 }
@@ -1446,7 +1458,7 @@ line_hits check_line_collision(Game *game, Line line){
     hits.enter_positions = (Vector2 *)malloc(collisions_count * sizeof(Vector2));
     hits.exit_positions  = (Vector2 *)malloc(collisions_count * sizeof(Vector2));
     hits.hit_types  = (i32 *)malloc(collisions_count * sizeof(i32));
-    hits.enemy_hits  = (fly_enemy **)malloc(collisions_count * sizeof(fly_enemy *));
+    hits.enemy_hits  = (Enemy **)malloc(collisions_count * sizeof(Enemy *));
     
     for (int i = 0; i <= points_count; i++){
         b32 hit_anything = 0;
@@ -1461,7 +1473,7 @@ line_hits check_line_collision(Game *game, Line line){
         line_point_entity.scale = {line.start_width, line.start_width};
         loop_world_position(game, &line_point_entity.position);
         
-        fly_enemy *enemy_collision = check_enemy_collision(game, line_point_entity);
+        Enemy *enemy_collision = check_enemy_collision(game, line_point_entity);
         if (enemy_collision){
             if (!in_some_collider){
                 hits.enter_positions[hits.enter_count] = subtract(line_point_entity.position, multiply(direction, 0.2f));
@@ -1677,45 +1689,11 @@ void draw_entities(Game *game, screen_buffer *Buffer){
     
     //draw enemies
     for  (int i = 0; i < game->fly_enemies.count; i++){ 
-        fly_enemy *enemy = (fly_enemy *)array_get(&game->fly_enemies, i);
-        
+        fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
+
+        draw_enemy(game, Buffer, &fly->enemy);
         //hit box
         //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0xaa3344);
-        b32 offsetting_on_death;
-        if (enemy->hp <= 0 && !enemy->render_dead){
-            enemy->render_dead = 1;
-            offsetting_on_death = 1;
-        }
-        
-        for (int j = 0; j < enemy->lines.count; j++){
-            line_entity *line_arr = (line_entity *)array_get(&enemy->lines, j);
-            Vector2 start_position = add(line_arr->line.start_position, enemy->entity.position);
-            Vector2 end_position = add(line_arr->line.end_position, enemy->entity.position);
-
-            if (offsetting_on_death){
-                start_position.x += rnd(-3.5f, 3.5f);
-                start_position.y += rnd(-3.5f, 3.5f);
-                end_position.x   += rnd(-3.5f, 3.5f);
-                end_position.y   += rnd(-3.5f, 3.5f);
-                line_arr->line.start_position = subtract(enemy->entity.position, start_position);
-                line_arr->line.end_position   = subtract(enemy->entity.position, end_position);
-            }
-            
-            if (enemy->hp > 0){
-                line_entity line = *line_arr;
-                //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
-                start_position.x += rnd(-0.5f, 0.5f);
-                start_position.y += rnd(-0.5f, 0.5f);
-                end_position.x   += rnd(-0.5f, 0.5f);
-                end_position.y   += rnd(-0.5f, 0.5f);
-                
-                draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
-            } else{
-                draw_line_gradient(game, Buffer, start_position, end_position, line_arr->visual_start_width, line_arr->visual_end_width, game->darker_background_gradient);
-            }
-        }
-        
-        offsetting_on_death = 0;
     }
     
     //draw fly enemy projectiles
@@ -1725,6 +1703,44 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         draw_line(Buffer, projectile->line_render);
     }
 
+}
+
+void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
+    b32 offsetting_on_death = 0;
+    if (enemy->hp <= 0 && !enemy->render_dead){
+        enemy->render_dead = 1;
+        offsetting_on_death = 1;
+    }
+    
+    for (int j = 0; j < enemy->lines.count; j++){
+        line_entity *line_arr = (line_entity *)array_get(&enemy->lines, j);
+        Vector2 start_position = add(line_arr->line.start_position, enemy->entity.position);
+        Vector2 end_position = add(line_arr->line.end_position, enemy->entity.position);
+
+        if (offsetting_on_death){
+            start_position.x += rnd(-3.5f, 3.5f);
+            start_position.y += rnd(-3.5f, 3.5f);
+            end_position.x   += rnd(-3.5f, 3.5f);
+            end_position.y   += rnd(-3.5f, 3.5f);
+            line_arr->line.start_position = subtract(enemy->entity.position, start_position);
+            line_arr->line.end_position   = subtract(enemy->entity.position, end_position);
+        }
+        
+        if (enemy->hp > 0){
+            line_entity line = *line_arr;
+            //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
+            start_position.x += rnd(-0.5f, 0.5f);
+            start_position.y += rnd(-0.5f, 0.5f);
+            end_position.x   += rnd(-0.5f, 0.5f);
+            end_position.y   += rnd(-0.5f, 0.5f);
+            
+            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
+        } else{
+            draw_line_gradient(game, Buffer, start_position, end_position, line_arr->visual_start_width, line_arr->visual_end_width, game->darker_background_gradient);
+        }
+    }
+    
+    offsetting_on_death = 0;
 }
 
 void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){
