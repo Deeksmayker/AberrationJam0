@@ -112,7 +112,7 @@ struct Player{
     f32 gravity_multiplier = 1;
     Vector2 velocity;
     
-    f32 melee_cooldown_timer;
+    b32 failed_cleaning;
     //shoot
     struct shooter{
         f32 pefrect_damage = 10.0f;
@@ -188,6 +188,7 @@ struct Enemy{
     Entity entity;  
     f32 hp = 12.0f;
     b32 render_dead;
+    b32 died;
     
     f32 time_in_blood;
     f32 max_time_in_blood = 10;
@@ -296,6 +297,8 @@ struct Game{
     
     b32 im_dying_man = 0;
     
+    i32 blockers_count;
+    
     particle_emitter blood_emitter;
     particle_emitter dust_emitter;
     
@@ -328,6 +331,7 @@ void update(Game *game);
 void update_player(Game *game);
 void update_enemies_spawn(Game *game);
 void update_fly_enemies(Game *game);
+void update_blocker_enemies(Game *game);
 void update_fly_enemy_projectiles(Game *game);
 void spawn_fly_enemy_projectile(Game *game, Vector2 direction, Vector2 start_position);
 void update_particles(Game *game);
@@ -347,8 +351,8 @@ line_hits check_line_collision(Game *game, Line line);
 void shake_camera(Game *game, f32 stress);
 void update_camera_shake(Game *game);
 
-
 void add_fly_enemy(Game *game, Vector2 position);
+void add_blocker_enemy(Game *game, Vector2 position);
 
 void debug_update(Game *game);
 
@@ -360,6 +364,7 @@ void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 dire
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position);
 
+global_variable b32 update_spawns;
 
 int level1[100][54] = {
     {0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},

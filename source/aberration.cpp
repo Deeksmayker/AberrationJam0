@@ -338,6 +338,7 @@ void InitGame(){
     global_game.blocker_enemies = array_init(sizeof(blocker_enemy), 100000);
     
     //add_fly_enemy(&global_game, {30, 35});
+    //add_blocker_enemy(&global_game, {30, 35});
     
     /*
     global_game.walls = array_init(sizeof(Entity));
@@ -561,6 +562,9 @@ void InitGame(){
     global_game.fly_enemies_gradient.colors_count = 5;
 }
 
+void Start(){
+    add_blocker_enemy(&global_game, {30, 35});
+}
 
 global_variable f32 previous_delta = 0;
 
@@ -604,6 +608,12 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
 
     global_game.input = input;
     global_game.time += delta;
+    
+    local_persist b32 setuped = 0;
+    if (!setuped){
+        Start();
+    }
+    setuped = 1;
     
     f32 frame_time = 0.0166666f;
     
@@ -656,6 +666,7 @@ void update(Game *game){
     update_player(game);
     update_fly_enemies(game);
     update_fly_enemy_projectiles(game);
+    update_blocker_enemies(game);
     update_particles(game);
     update_camera_shake(game);
     debug_update(game);
@@ -669,7 +680,7 @@ void update(Game *game){
 }
 
 void update_enemies_spawn(Game *game){
-    if (current_spawn_index >= SPAWN_COUNT){
+    if (!update_spawns || current_spawn_index >= SPAWN_COUNT){
         return;
     }
 
@@ -815,7 +826,11 @@ void update_player(Game *game){
         if (shooting){
             shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
         } else{
-            emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.05f);
+            if (game->blockers_count <= 0){
+                emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.05f);
+            } else{
+                game->player.failed_cleaning = 1;
+            }
         }
     } else{
         shoot->holding_timer = 0;
@@ -904,12 +919,26 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
     }
 }
 
+void update_blocker_enemies(Game *game){
+    for (int i = 0; i < game->blocker_enemies.count; i++){
+        blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
+        
+        if (blocker->enemy.hp <= 0){
+            if (!blocker->enemy.died){
+                game->blockers_count--;
+                blocker->enemy.died = 1;
+            }
+            continue;
+        }
+    }
+}
 
 void update_fly_enemies(Game *game){
     for (int i = 0; i < game->fly_enemies.count; i++){
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
         
         if (fly->enemy.hp <= 0){
+            fly->enemy.died = 1;
             //array_remove(&game->fly_enemies, i);
             continue;
         }
@@ -1145,6 +1174,7 @@ void add_fly_enemy(Game *game, Vector2 position){
     loop_world_position(game, &position);
 
     fly_enemy fly = {};
+    fly.enemy = {};
     fly.enemy.entity.position = position;
     fly.enemy.entity.scale = {4, 5};
     
@@ -1197,6 +1227,18 @@ void add_fly_enemy(Game *game, Vector2 position){
     array_add(&global_game.fly_enemies, &fly);
 }
 
+void add_blocker_enemy(Game *game, Vector2 position){
+    loop_world_position(game, &position);
+    
+    game->blockers_count++;
+    
+    blocker_enemy blocker = {};
+    blocker.enemy = {};
+    blocker.enemy.entity.position = position;
+    blocker.enemy.entity.scale = {3, 7};
+
+    array_add(&global_game.blocker_enemies, &blocker);
+}
 
 void check_player_collisions(Game *game){
     game->player.grounded = 0;
@@ -1694,6 +1736,14 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         draw_enemy(game, Buffer, &fly->enemy);
         //hit box
         //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0xaa3344);
+    }
+    
+    for  (int i = 0; i < game->blocker_enemies.count; i++){ 
+        blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
+
+        ///draw_enemy(game, Buffer, &fly->enemy);
+        //hit box
+        draw_rect(Buffer, blocker->enemy.entity.position, blocker->enemy.entity.scale, 0xaa3344);
     }
     
     //draw fly enemy projectiles
