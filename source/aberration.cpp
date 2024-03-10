@@ -830,6 +830,7 @@ void update_player(Game *game){
                 emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.05f);
             } else{
                 game->player.failed_cleaning = 1;
+                shake_camera(game, 0.5f);
             }
         }
     } else{
@@ -920,6 +921,8 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
 }
 
 void update_blocker_enemies(Game *game){
+    u32 toxic_green = 0x61DE2A;
+
     for (int i = 0; i < game->blocker_enemies.count; i++){
         blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
         
@@ -930,7 +933,26 @@ void update_blocker_enemies(Game *game){
             }
             continue;
         }
+        
+        if (game->player.failed_cleaning){
+            Line line = {};
+            line.start_position = game->player.entity.position;
+            line.end_position   = blocker->enemy.entity.position;
+            line.start_width = 3.0f;
+            line.end_width = 1.0f;
+            
+            line_entity visual_line = {};
+            visual_line.line = line;
+            visual_line.line.start_width = 1.0f;
+            visual_line.line.end_width = 0.5f;
+            visual_line.color = toxic_green; 
+            visual_line.max_lifetime = 0.7f;
+            
+            array_add(&game->line_entities, &visual_line);
+        }
     }
+    
+    game->player.failed_cleaning = 0;
 }
 
 void update_fly_enemies(Game *game){
