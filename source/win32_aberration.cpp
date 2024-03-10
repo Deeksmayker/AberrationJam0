@@ -23,6 +23,8 @@ typedef float  f32;
 typedef double f64;
 
 //previous - 960x540
+//previous - 640x360
+//can 800x450
 global_variable int game_width_pixels = 640;
 global_variable int game_height_pixels = 360;
 
@@ -144,6 +146,19 @@ Win32MainWindowCallback(HWND Window,
                 
                 case 'G':{
                     input.g_key = IsDown;
+                    /*
+                    if (!WasDown && IsDown){
+                        if (game_width_pixels == 800){
+                            game_width_pixels = 640;
+                            game_height_pixels = 360;
+                        } else{
+                            game_width_pixels = 800;
+                            game_height_pixels = 450;
+                        }
+                                                
+                        Win32ResizeDIBSection(&GlobalBackBuffer, game_width_pixels, game_height_pixels);
+                    }
+                    */
                 } break;
                 
                 case VK_SPACE:{

@@ -90,7 +90,7 @@ void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             color &= game->current_color_palette;
-            color = lerp_color(color, 0xFF0A0A, EaseOutQuint(game->player.in_blood_progress));
+            color = lerp_color(color, 0xFF0A0A, sqrt(game->player.in_blood_progress));
             
             *pixel++ = color;
         }
@@ -186,6 +186,10 @@ void draw_line_gradient(Game *game, screen_buffer *Buffer, f32 start_x, f32 star
     
 }
 
+void draw_line_gradient(Game *game, screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 start_width, f32 end_width, Gradient gradient){
+    draw_line_gradient(game, Buffer, start_position.x, start_position.y, end_position.x, end_position.y, start_width, end_width, gradient);    
+}
+
 void draw_line(screen_buffer *Buffer, Vector2 start_position, Vector2 end_position, f32 start_width, f32 end_width, u32 color){
     draw_line(Buffer, start_position.x, start_position.y, end_position.x, end_position.y, start_width, end_width, color);
 }
@@ -241,7 +245,7 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             color &= game->current_color_palette;
-            color = lerp_color(color, 0xFF0A0A, EaseOutQuint(game->player.in_blood_progress));
+            color = lerp_color(color, 0xFF0A0A, sqrt(game->player.in_blood_progress));
             
             *Pixel++ = color;
         }
@@ -359,17 +363,32 @@ void InitGame(){
         splash_buffer[i] = (u32 *)calloc(global_game.world_size.x * unit_size, sizeof(u32));
     }
     
-    particle_emitter *shoot_emitter = &global_game.player.shoot.wall_hit_emitter;
-    *shoot_emitter = {};
-    shoot_emitter->speed_min    = 40;
-    shoot_emitter->speed_max    = 150;
-    shoot_emitter->scale_min    = 0.4f;
-    shoot_emitter->scale_max    = 1.5f;
-    shoot_emitter->count_min    = 30;
-    shoot_emitter->count_max    = 80;
-    shoot_emitter->lifetime_min = 0.1f;
-    shoot_emitter->lifetime_max = 0.5f;
-    shoot_emitter->shape = (particle_shape)0;
+    u32 sunset_orange = 0xfd754d;
+    u32 sky_white = 0xefeeee;
+    u32 blue_sky = 0x98bad5;
+    
+    u32 pale_green = 0x98fb98;
+    u32 bamboo_green = 0xe2dbac;
+    u32 dark_green = 0x2d4b2d;
+    
+    particle_emitter *wall_hit_emitter = &global_game.player.shoot.wall_hit_emitter;
+    *wall_hit_emitter = {};
+    wall_hit_emitter->speed_min        = 40;
+    wall_hit_emitter->speed_max        = 100;
+    wall_hit_emitter->scale_min        = 0.9f;
+    wall_hit_emitter->scale_max        = 2.0f;
+    wall_hit_emitter->count_min        = 10;
+    wall_hit_emitter->count_max        = 30;
+    wall_hit_emitter->lifetime_min     = 0.5f;
+    wall_hit_emitter->lifetime_max     = 1.5f;
+    wall_hit_emitter->shape = (particle_shape)0;
+    wall_hit_emitter->color            = dark_green;
+    wall_hit_emitter->spread           = 0.4f;
+    wall_hit_emitter->shape            = (particle_shape)0;
+    wall_hit_emitter->try_splash       = 0;
+    wall_hit_emitter->splash_chance    = 0;
+    wall_hit_emitter->colliding_chance = 1;
+    wall_hit_emitter->per_second       = 1;
     
     particle_emitter *pole_ride_emitter = &global_game.player.pole_ride_emitter;
     *pole_ride_emitter = {};
@@ -412,16 +431,67 @@ void InitGame(){
     cleaning_emitter->lifetime_max     = 2.0f;
     cleaning_emitter->color            = 0xffffff;
     cleaning_emitter->spread           = 0.4f;
-    cleaning_emitter->shape            = (particle_shape)0;
+    cleaning_emitter->shape            = (particle_shape)1;
     cleaning_emitter->try_splash       = 1;
     cleaning_emitter->splash_chance    = 0.8f;
     cleaning_emitter->colliding_chance = 1.0f;
     cleaning_emitter->per_second       = 10;
     
+    u32 sun_yellow = 0xFFDF22;
     
-    u32 sunset_orange = 0xfd754d;
-    u32 sky_white = 0xefeeee;
-    u32 blue_sky = 0x98bad5;
+    particle_emitter *charged_emitter = &global_game.player.charged_emitter;
+    *charged_emitter = {};
+    charged_emitter->count_min        = 10;
+    charged_emitter->count_max        = 30;
+    charged_emitter->speed_min        = 30;
+    charged_emitter->speed_max        = 70;
+    charged_emitter->scale_min        = 0.5;
+    charged_emitter->scale_max        = 1.2f;
+    charged_emitter->lifetime_min     = 0.5f;
+    charged_emitter->lifetime_max     = 1.0f;
+    charged_emitter->color            = sun_yellow;
+    charged_emitter->spread           = 0.4f;
+    charged_emitter->shape            = (particle_shape)1;
+    charged_emitter->try_splash       = 0;
+    charged_emitter->splash_chance    = 0;
+    charged_emitter->colliding_chance = 0;
+    charged_emitter->per_second       = 10;
+    
+    particle_emitter *shoot_emitter = &global_game.player.shoot_emitter;
+   *shoot_emitter = {};
+    shoot_emitter->count_min        = 1;
+    shoot_emitter->count_max        = 1;
+    shoot_emitter->speed_min        = 30;
+    shoot_emitter->speed_max        = 100;
+    shoot_emitter->scale_min        = 1.0f;
+    shoot_emitter->scale_max        = 1.5f;
+    shoot_emitter->lifetime_min     = 10.0f;
+    shoot_emitter->lifetime_max     = 20.0f;
+    shoot_emitter->color            = sunset_orange;
+    shoot_emitter->spread           = 0.4f;
+    shoot_emitter->shape            = (particle_shape)0;
+    shoot_emitter->try_splash       = 0;
+    shoot_emitter->splash_chance    = 0;
+    shoot_emitter->colliding_chance = 1;
+    shoot_emitter->per_second       = 1;
+    
+    particle_emitter *dust_emitter = &global_game.dust_emitter;
+   *dust_emitter = {};
+    dust_emitter->count_min        = 10;
+    dust_emitter->count_max        = 30;
+    dust_emitter->speed_min        = 30;
+    dust_emitter->speed_max        = 50;
+    dust_emitter->scale_min        = 0.5f;
+    dust_emitter->scale_max        = 1.0f;
+    dust_emitter->lifetime_min     = 0.5f;
+    dust_emitter->lifetime_max     = 1.0f;
+    dust_emitter->color            = 0xa0a0a0;
+    dust_emitter->spread           = 0.8f;
+    dust_emitter->shape            = (particle_shape)0;
+    dust_emitter->try_splash       = 0;
+    dust_emitter->splash_chance    = 0;
+    dust_emitter->colliding_chance = 0.5f;
+    dust_emitter->per_second       = 10;
     
     global_game.background_gradient = {};
     global_game.background_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
@@ -431,6 +501,15 @@ void InitGame(){
     global_game.background_gradient.colors[3] = sky_white;
     global_game.background_gradient.colors[4] = blue_sky;
     global_game.background_gradient.colors_count = 5;
+    
+    global_game.darker_background_gradient = {};
+    global_game.darker_background_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.darker_background_gradient.colors[0] = blue_sky - 0x0a0a0a;
+    global_game.darker_background_gradient.colors[1] = sky_white - 0x0a0a0a;
+    global_game.darker_background_gradient.colors[2] = sunset_orange - 0x0a0a0a;
+    global_game.darker_background_gradient.colors[3] = sky_white - 0x0a0a0a;
+    global_game.darker_background_gradient.colors[4] = blue_sky - 0x0a0a0a;
+    global_game.darker_background_gradient.colors_count = 5;
     
     u32 grass = 0x41980a;
     u32 pale_grass = 0xe3fd98;
@@ -458,10 +537,6 @@ void InitGame(){
     global_game.blood_gradient.colors[4] = blood_light;
     global_game.blood_gradient.colors_count = 5;
     
-    u32 pale_green = 0x98fb98;
-    u32 bamboo_green = 0xe2dbac;
-    u32 dark_green = 0x2d4b2d;
-    
     global_game.pole_gradient = {};
     global_game.pole_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
     global_game.pole_gradient.colors[0] = pale_green;
@@ -488,11 +563,20 @@ void InitGame(){
 global_variable f32 previous_delta = 0;
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
+/*
+    local_persist b32 previous_g = 0;
+    if (input.g_key && !previous_g){
+        if (game_width_pixels == 640){
+            unit_size = 3.0f;
+        } else{
+            unit_size = 3.75f;
+        }
+    }
+    previous_g = input.g_key;
+*/
     rand_seed = (u32)(global_game.delta * 10000000000.0f);
     rnd_state = rand_seed;
     
-    //unit_size = lerp(unit_size, 0.1f, delta * 0.5f);
-
     f32 mouse_world_position_x = ((f32)input.mouse_screen_position.x /
                                  ((f32)Buffer->ScreenWidth / (f32)Buffer->Width)) / 
                                  unit_size;
@@ -602,6 +686,18 @@ void update_player(Game *game){
     
     if (game->player.grounded){
         apply_friction(&(game->player.velocity), game->player.base_speed, game->delta, game->player.friction);
+        
+        if (abs(player->velocity.x) > 15){
+            Vector2 dust_particles_direction = {};
+            if (horizontal != 0){
+                dust_particles_direction = {-horizontal, 0.5f};
+            } else{
+                dust_particles_direction = {normalize(player->velocity.x), 0.5f};
+            }
+            
+            f32 speed_progress = abs(game->player.velocity.x) * 0.01f;
+            update_overtime_emitter(game, &game->dust_emitter, dust_particles_direction, subtract(player->entity.position, {0, -2}), lerp(1.0f, 10.0f, speed_progress)); 
+        }
     }
     
     
@@ -653,7 +749,7 @@ void update_player(Game *game){
         if (shoot->holding_timer >= shoot->perfect_hold_time && !shoot->perfect_charged){
             shoot->perfect_charged = 1;
             
-            emit_particles(game, shoot->wall_hit_emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
+            emit_particles(game, game->player.charged_emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
             
         }
         //shooting
@@ -670,6 +766,9 @@ void update_player(Game *game){
                          
         shoot->just_shoot = perfect_shoot ? 2 : 1;
         player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
+        if (cleaning){
+            player->shoot.cooldown_timer = 1;
+        }
         
         shoot->holding_timer = 0;
         
@@ -713,6 +812,11 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
     line.end_width = line.start_width;
     
     shake_camera(game, perfect_shoot ? 0.5f : 0.1f);
+    
+    Vector2 bullet_shell_direction = player_to_mouse;
+    clamp(&bullet_shell_direction.y, 0.2f, 1.0f);
+    bullet_shell_direction.x = -player_to_mouse.x;
+    emit_particles(game, game->player.shoot_emitter, bullet_shell_direction, game->player.entity.position, 1.0f);
     
     //shoot line render
     line_entity visual_line = {};
@@ -765,6 +869,8 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
                 subtract(&wall_visual_line.line.end_position, hits.enemy_hits[i]->entity.position);
                 array_add(&hits.enemy_hits[i]->lines, &wall_visual_line);
                 
+                hits.enemy_hits[i]->hp -= perfect_shoot ? shoot->pefrect_damage : shoot->damage;
+                
                 hitstop_countdown += 0.1f;
                 shake_camera(game, 0.1f);
             }
@@ -776,6 +882,11 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
 void update_fly_enemies(Game *game){
     for (int i = 0; i < game->fly_enemies.count; i++){
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
+        
+        if (fly->hp <= 0){
+            //array_remove(&game->fly_enemies, i);
+            continue;
+        }
         
         Vector2 vector_to_player = subtract(game->player.entity.position, fly->entity.position);
         Vector2 direction_to_player = normalized(vector_to_player);
@@ -1096,6 +1207,14 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                 if (collisions_data[i].normal.y != 1){
                     bounce_power *= 1.2f;
                 }
+                
+                if (bounce_power > 20){
+                    f32 t = (bounce_power - 20) / 150.0f;
+                    emit_particles(game, game->dust_emitter, collisions_data[i].normal, subtract(player->entity.position, collisions_data[i].normal), lerp(0.01f, 8.0f, t * t * t));
+                    
+                    shake_camera(game, lerp(0.0f, 0.6f, t * t));
+                }
+                
                 add(&player->velocity, multiply(collisions_data[i].normal, bounce_power));
             } break;
             
@@ -1138,8 +1257,10 @@ void update_particles(Game *game){
         
         particle->entity.position = next_position;
         
+        loop_world_position(game, &particle->entity.position);
+        
         if (particle->leave_splash){
-            add_splash(game, particle->entity, particle->color);
+            add_splash(game, particle->entity, particle-> splash_color == 0 ? particle->color : particle->splash_color);
         }
     }
 }
@@ -1437,7 +1558,7 @@ void render(Game *game, screen_buffer *Buffer){
     draw_line(Buffer,
               add(player->entity.position, multiply(player_to_mouse, 3.0f * length_multiplier)),
               add(player->entity.position, multiply(player_to_mouse, 4.5f * end_length_multiplier)),
-              0.7f, 0.5f, 0x999999);
+              0.7f, 0.6f, 0x999999);
     
     //draw_line(Buffer, game->player.entity.position, game->input.mouse_world_position, 0.2f, 0xff5533);
     
@@ -1531,21 +1652,41 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         
         //hit box
         //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0xaa3344);
+        b32 offsetting_on_death;
+        if (enemy->hp <= 0 && !enemy->render_dead){
+            enemy->render_dead = 1;
+            offsetting_on_death = 1;
+        }
         
         for (int j = 0; j < enemy->lines.count; j++){
             line_entity *line_arr = (line_entity *)array_get(&enemy->lines, j);
-            line_entity line = *line_arr;
-            //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
-            Vector2 start_position = add(line.line.start_position, enemy->entity.position);
-            Vector2 end_position = add(line.line.end_position, enemy->entity.position);
-            start_position.x += rnd(-0.5f, 0.5f);
-            start_position.y += rnd(-0.5f, 0.5f);
-            end_position.x   += rnd(-0.5f, 0.5f);
-            end_position.y   += rnd(-0.5f, 0.5f);
-            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
-            //draw_line_gradient(game, Buffer, start_position.x, start_position.y, end_position.x, end_position.y, line.visual_start_width, line.visual_end_width, game->fly_enemies_gradient);
+            Vector2 start_position = add(line_arr->line.start_position, enemy->entity.position);
+            Vector2 end_position = add(line_arr->line.end_position, enemy->entity.position);
+
+            if (offsetting_on_death){
+                start_position.x += rnd(-3.5f, 3.5f);
+                start_position.y += rnd(-3.5f, 3.5f);
+                end_position.x   += rnd(-3.5f, 3.5f);
+                end_position.y   += rnd(-3.5f, 3.5f);
+                line_arr->line.start_position = subtract(enemy->entity.position, start_position);
+                line_arr->line.end_position   = subtract(enemy->entity.position, end_position);
+            }
             
+            if (enemy->hp > 0){
+                line_entity line = *line_arr;
+                //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
+                start_position.x += rnd(-0.5f, 0.5f);
+                start_position.y += rnd(-0.5f, 0.5f);
+                end_position.x   += rnd(-0.5f, 0.5f);
+                end_position.y   += rnd(-0.5f, 0.5f);
+                
+                draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
+            } else{
+                draw_line_gradient(game, Buffer, start_position, end_position, line_arr->visual_start_width, line_arr->visual_end_width, game->darker_background_gradient);
+            }
         }
+        
+        offsetting_on_death = 0;
     }
     
     //draw fly enemy projectiles

@@ -215,10 +215,12 @@ u32 rnd()
 }
 
 int rnd(int min, int max){
+    if (min == max) return max;
     return (rnd() % (max - min)) + min;
 }
 
 f32 rnd(f32 min, f32 max){
+    if (min == max) return max;
     return ((f32)rnd() / (f32)(0x7FFFFFFF)) * (max - min) + min;
 }
 

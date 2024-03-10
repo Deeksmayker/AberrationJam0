@@ -8,6 +8,8 @@
 
 //6 at 1280x720
 //4.5 at 960x540
+//3 at 640x360
+//3.75 at 800x450
 #define UNIT_SIZE 3.0f;
 
 global_variable int collisions_count = 8;
@@ -71,6 +73,7 @@ struct Particle{
     b32 colliding;
     
     u32 color = 0x34f132;
+    u32 splash_color = 0;
 };
 
 struct particle_emitter{
@@ -126,13 +129,14 @@ struct Player{
         b32 perfect_charged;
         i32 just_shoot;
         particle_emitter wall_hit_emitter;
-        particle_emitter charged_emitter;
     };
     
     shooter shoot = {};
         
     particle_emitter pole_ride_emitter;
     particle_emitter cleaning_emitter;
+    particle_emitter charged_emitter;
+    particle_emitter shoot_emitter;
     
     f32 max_in_blood_time = 20;
     f32 in_blood_time;
@@ -183,6 +187,7 @@ struct fly_enemy_projectile{
 struct fly_enemy{
     Entity entity;  
     f32 hp = 10.0f;
+    b32 render_dead;
     
     b32 charging;
     f32 charge_duration = 2;
@@ -276,6 +281,7 @@ struct Game{
     particle_emitter dust_emitter;
     
     Gradient background_gradient;
+    Gradient darker_background_gradient;
     Gradient tiles_gradient;
     Gradient blood_gradient;
     Gradient pole_gradient;
