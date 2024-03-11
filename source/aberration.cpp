@@ -563,7 +563,7 @@ void InitGame(){
 }
 
 void Start(){
-    add_blocker_enemy(&global_game, {30, 35});
+    add_blocker_enemy(&global_game, {30, 45});
 }
 
 global_variable f32 previous_delta = 0;
@@ -944,7 +944,7 @@ void update_blocker_enemies(Game *game){
         if (game->player.failed_cleaning){
             Line line = {};
             line.start_position = game->player.entity.position;
-            line.end_position   = blocker->enemy.entity.position;
+            line.end_position   = add(blocker->enemy.entity.position, {0, 17});
             line.start_width = 3.0f;
             line.end_width = 1.0f;
             
@@ -1280,8 +1280,76 @@ void add_blocker_enemy(Game *game, Vector2 position){
     
     blocker_enemy blocker = {};
     blocker.enemy = {};
+    blocker.enemy.hp = 22;
     blocker.enemy.entity.position = position;
-    blocker.enemy.entity.scale = {3, 7};
+    blocker.enemy.entity.scale = {8, 25};
+    
+    blocker.enemy.lines = array_init(sizeof(line_entity), 100);
+    
+    line_entity triangle_line_1 = {};
+    triangle_line_1.line = {};
+    triangle_line_1.line.start_position = {-6, 10};
+    triangle_line_1.line.end_position = {6, 10};
+    triangle_line_1.visual_start_width = 1.5f;
+    triangle_line_1.visual_end_width = 1.5f;
+    
+    line_entity triangle_line_2 = {};
+    triangle_line_2.line = {};
+    triangle_line_2.line.start_position = {-6, 10};
+    triangle_line_2.line.end_position = {0, -12.5};
+    triangle_line_2.visual_start_width = 1.5f;
+    triangle_line_2.visual_end_width = 0.8f;
+    
+    line_entity triangle_line_3 = {};
+    triangle_line_3.line = {};
+    triangle_line_3.line.start_position = {6, 10};
+    triangle_line_3.line.end_position = {0, -12.5};
+    triangle_line_3.visual_start_width = 1.5f;
+    triangle_line_3.visual_end_width = 0.8f;
+    
+    line_entity triangle_line_4 = {};
+    triangle_line_4.line = {};
+    triangle_line_4.line.start_position = {0, 0};
+    triangle_line_4.line.end_position = {0, 20};
+    triangle_line_4.visual_start_width = 1.5f;
+    triangle_line_4.visual_end_width = 0.8f;
+
+    line_entity triangle_line_5 = {};
+    triangle_line_5.line = {};
+    triangle_line_5.line.start_position = {-4, 17};
+    triangle_line_5.line.end_position = {4, 17};
+    triangle_line_5.visual_start_width = 1;
+    triangle_line_5.visual_end_width = 1;
+
+    line_entity triangle_line_6 = {};
+    triangle_line_6.line = {};
+    triangle_line_6.line.start_position = {-6, 10};
+    triangle_line_6.line.end_position = {0, 0};
+    triangle_line_6.visual_start_width = 1.5f;
+    triangle_line_6.visual_end_width = 0.7f;
+
+    line_entity triangle_line_7 = {};
+    triangle_line_7.line = {};
+    triangle_line_7.line.start_position = {6, 10};
+    triangle_line_7.line.end_position = {0, 0};
+    triangle_line_7.visual_start_width = 1.5f;
+    triangle_line_7.visual_end_width = 0.7f;
+
+    line_entity triangle_line_8 = {};
+    triangle_line_8.line = {};
+    triangle_line_8.line.start_position = {0, -12.5};
+    triangle_line_8.line.end_position = {0, 0};
+    triangle_line_8.visual_start_width = 1.5f;
+    triangle_line_8.visual_end_width = 0.7f;
+
+    array_add(&blocker.enemy.lines, &triangle_line_1);
+    array_add(&blocker.enemy.lines, &triangle_line_2);
+    array_add(&blocker.enemy.lines, &triangle_line_3);
+    array_add(&blocker.enemy.lines, &triangle_line_4);
+    array_add(&blocker.enemy.lines, &triangle_line_5);
+    array_add(&blocker.enemy.lines, &triangle_line_6);
+    array_add(&blocker.enemy.lines, &triangle_line_7);
+    array_add(&blocker.enemy.lines, &triangle_line_8);
 
     array_add(&global_game.blocker_enemies, &blocker);
 }
@@ -1779,17 +1847,19 @@ void draw_entities(Game *game, screen_buffer *Buffer){
     for  (int i = 0; i < game->fly_enemies.count; i++){ 
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
 
-        draw_enemy(game, Buffer, &fly->enemy);
         //hit box
         //draw_rect(Buffer, enemy->entity.position, enemy->entity.scale, 0xaa3344);
+        
+        draw_enemy(game, Buffer, &fly->enemy);
     }
     
     for  (int i = 0; i < game->blocker_enemies.count; i++){ 
         blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
 
-        ///draw_enemy(game, Buffer, &fly->enemy);
         //hit box
-        draw_rect(Buffer, blocker->enemy.entity.position, blocker->enemy.entity.scale, 0xaa3344);
+        //draw_rect(Buffer, blocker->enemy.entity.position, blocker->enemy.entity.scale, 0xaa3344);
+        
+        draw_enemy(game, Buffer, &blocker->enemy);
     }
     
     //draw fly enemy projectiles
@@ -1814,10 +1884,10 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
         Vector2 end_position = add(line_arr->line.end_position, enemy->entity.position);
 
         if (offsetting_on_death){
-            start_position.x += rnd(-3.5f, 3.5f);
-            start_position.y += rnd(-3.5f, 3.5f);
-            end_position.x   += rnd(-3.5f, 3.5f);
-            end_position.y   += rnd(-3.5f, 3.5f);
+            start_position.x += rnd(-1.5f, 1.5f);
+            start_position.y += rnd(-1.5f, 1.5f);
+            end_position.x   += rnd(-1.5f, 1.5f);
+            end_position.y   += rnd(-1.5f, 1.5f);
             line_arr->line.start_position = subtract(enemy->entity.position, start_position);
             line_arr->line.end_position   = subtract(enemy->entity.position, end_position);
         }
