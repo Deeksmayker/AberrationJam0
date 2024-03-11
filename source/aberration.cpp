@@ -514,6 +514,15 @@ void InitGame(){
     global_game.darker_background_gradient.colors[4] = blue_sky - 0x0a0a0a;
     global_game.darker_background_gradient.colors_count = 5;
     
+    global_game.lighter_background_gradient = {};
+    global_game.lighter_background_gradient.colors = (u32 *)malloc(5 * sizeof(u32));
+    global_game.lighter_background_gradient.colors[0] = blue_sky + 0x0a0a0a;
+    global_game.lighter_background_gradient.colors[1] = sky_white + 0x0a0a0a;
+    global_game.lighter_background_gradient.colors[2] = sunset_orange + 0x0a0a0a;
+    global_game.lighter_background_gradient.colors[3] = sky_white + 0x0a0a0a;
+    global_game.lighter_background_gradient.colors[4] = blue_sky + 0x0a0a0a;
+    global_game.lighter_background_gradient.colors_count = 5;
+    
     u32 grass = 0x41980a;
     u32 pale_grass = 0xe3fd98;
     u32 ground = 0x87421c;
@@ -563,7 +572,7 @@ void InitGame(){
 }
 
 void Start(){
-    add_blocker_enemy(&global_game, {30, 45});
+    //add_blocker_enemy(&global_game, {30, 45});
 }
 
 global_variable f32 previous_delta = 0;
@@ -620,6 +629,12 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     }
     setuped = 1;
     
+    if (global_game.dead_man){
+        global_game.delta = delta;
+        render(&global_game, Buffer);
+        return;
+    }
+    
     f32 frame_time = 0.0166666f;
     
     f32 real_delta = delta;
@@ -659,7 +674,11 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     
     camera_target_y += additional_vertical_position * 0.3f;
     
-    camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 10);
+    if (global_game.we_got_a_winner){
+        camera_position.y += global_game.delta * 10;
+    } else{
+        camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 10);
+    }
     loop_world_position(&global_game, &camera_position);
 
     global_game.delta = real_delta;
@@ -684,20 +703,31 @@ void update(Game *game){
     //camera_position = game->player.entity.position;
 }
 
+Vector2 get_random_offscreen_position(Game *game){
+    b32 spawn_up = rnd() % 256 < 128;
+    f32 x_position = rnd(0.0f, game->world_size.x);
+    f32 y_position = get_camera_position().y + rnd(game->camera_screen_world_size.y * 0.6f,
+                                                   game->camera_screen_world_size.y * 1.1f);
+    Vector2 position = {x_position, y_position};
+    
+    return position;
+}
+
 void update_enemies_spawn(Game *game){
+    if (current_spawn_index >= SPAWN_COUNT && game->enemies_count <= 0 && !game->we_got_a_winner){
+        game->we_got_a_winner = 1;
+    }
+
     if (!update_spawns || current_spawn_index >= SPAWN_COUNT){
         return;
     }
 
     if (game->time >= spawns[current_spawn_index].spawn_time){
         for (int i = 0; i < spawns[current_spawn_index].fly_enemies_count; i++){
-            b32 spawn_up = rnd() % 256 < 128;
-            f32 x_position = rnd(0.0f, game->world_size.x);
-            f32 y_position = get_camera_position().y + rnd(game->camera_screen_world_size.y * 0.6f,
-                                                           game->camera_screen_world_size.y * 1.1f);
-            Vector2 position = {x_position, y_position};
-            
-            add_fly_enemy(game, position);
+            add_fly_enemy(game, get_random_offscreen_position(game));
+        }
+        for (int i = 0; i < spawns[current_spawn_index].blocker_enemies_count; i++){
+            add_blocker_enemy(game, get_random_offscreen_position(game));
         }
         current_spawn_index++;
     }
@@ -705,6 +735,10 @@ void update_enemies_spawn(Game *game){
 
 void update_player(Game *game){
     Player *player = &game->player;
+
+    if (game->player.damage_immune_countdown > 0){
+        game->player.damage_immune_countdown -= game->delta;
+    }
 
     f32 vertical = 0;
     if (game->input.up_key) vertical = 1;
@@ -814,9 +848,9 @@ void update_player(Game *game){
         shoot->holding_timer = 0;
         
         //recoil
-        Vector2 recoil_direction = multiply(player_to_mouse, -1);
-        
         if (shooting){
+        /*
+            Vector2 recoil_direction = multiply(player_to_mouse, -1);
             if (player->velocity.x * recoil_direction.x < 0){
                 player->velocity.x = 0;
             }
@@ -824,7 +858,9 @@ void update_player(Game *game){
                 player->velocity.y = 0;
             }
             
-            add(&player->velocity, multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f));
+            Vector2 recoil_vector = multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f); 
+        */
+            add(&player->velocity, multiply({0, 1}, perfect_shoot ? shoot->push_force : shoot->push_force * 0.3f));
         }
 
         
@@ -936,6 +972,7 @@ void update_blocker_enemies(Game *game){
         if (blocker->enemy.hp <= 0){
             if (!blocker->enemy.died){
                 game->blockers_count--;
+                game->enemies_count--;
                 blocker->enemy.died = 1;
             }
             continue;
@@ -980,7 +1017,10 @@ void update_fly_enemies(Game *game){
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
         
         if (fly->enemy.hp <= 0){
-            fly->enemy.died = 1;
+            if (!fly->enemy.died){
+                game->enemies_count--;
+                fly->enemy.died = 1;
+            }
             //array_remove(&game->fly_enemies, i);
             continue;
         }
@@ -1113,7 +1153,7 @@ void update_fly_enemies(Game *game){
 }
 
 void check_player_in_enemy(Game *game, Enemy enemy, Vector2 direction_to_player){
-    if (check_box_collision(&enemy.entity, &game->player.entity)){
+    if (game->player.damage_immune_countdown <= 0 && check_box_collision(&enemy.entity, &game->player.entity)){
         //Enemy hit player
         game->player.velocity.y += 60;
         emit_particles(game, game->blood_emitter, direction_to_player, game->player.entity.position, 1);
@@ -1124,6 +1164,8 @@ void check_player_in_enemy(Game *game, Enemy enemy, Vector2 direction_to_player)
         
         hitstop_countdown += 0.2f;
         clamp(&hitstop_countdown, 0, 1);
+        
+        game->player.damage_immune_countdown = 0.05f; 
     }
 }
 
@@ -1219,6 +1261,8 @@ void apply_friction(Vector2 *velocity, f32 max_speed, f32 delta, f32 friction){
 void add_fly_enemy(Game *game, Vector2 position){
     loop_world_position(game, &position);
 
+    game->enemies_count++;
+
     fly_enemy fly = {};
     fly.enemy = {};
     fly.enemy.entity.position = position;
@@ -1277,6 +1321,7 @@ void add_blocker_enemy(Game *game, Vector2 position){
     loop_world_position(game, &position);
     
     game->blockers_count++;
+    game->enemies_count++;
     
     blocker_enemy blocker = {};
     blocker.enemy = {};
@@ -1359,16 +1404,20 @@ void check_player_collisions(Game *game){
     
     calculate_player_tilemap_collisions(game, check_tilemap_collisions(game, game->player.velocity, game->player.entity));
     
-    if (in_blood(game->player.entity)){
+    if (!game->we_got_a_winner && in_blood(game->player.entity)){
         game->player.in_blood_time += game->delta;
         
         game->player.not_in_blood_time = 0;
         //shake_camera(game, game->delta);
         game->im_dying_man = 1;
+        
+        if (game->player.in_blood_time >= game->player.max_in_blood_time){
+            game->dead_man = 1;
+        }
     } else{
         game->player.not_in_blood_time += game->delta;
         game->im_dying_man = 0;
-        if (game->player.not_in_blood_time > 5){
+        if (game->player.not_in_blood_time > 2){
             game->player.in_blood_time -= game->delta;
         }
     }
@@ -1699,6 +1748,10 @@ void render(Game *game, screen_buffer *Buffer){
     
     draw_entities(game, Buffer);
 
+    if (game->dead_man){
+        return;
+    }
+
     Player *player = &game->player;
     draw_rect(Buffer, player->entity.position, player->entity.scale, 0x11ff3423);
     //Vector2 added = add(game->player.entity.position, {10, 10});
@@ -1761,6 +1814,10 @@ void render(Game *game, screen_buffer *Buffer){
     
     //draw_rect(Buffer, game->input.mouse_world_position.x, game->input.mouse_world_position.y, 3, 3, 0xbc32fd);
     //draw_rect(Buffer, player.entity.position.x, player.entity.position.y, player.scale.x * unit_size, player.scale.y * unit_size, 0xff5533);
+    
+    if (game->we_got_a_winner){
+        draw_win_sign(game, Buffer);
+    }
 }
 
 void draw_entities(Game *game, screen_buffer *Buffer){
@@ -1873,7 +1930,7 @@ void draw_entities(Game *game, screen_buffer *Buffer){
 
 void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
     b32 offsetting_on_death = 0;
-    if (enemy->hp <= 0 && !enemy->render_dead){
+    if ((game->dead_man || enemy->hp <= 0) && !enemy->render_dead){
         enemy->render_dead = 1;
         offsetting_on_death = 1;
     }
@@ -1892,7 +1949,7 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
             line_arr->line.end_position   = subtract(enemy->entity.position, end_position);
         }
         
-        if (enemy->hp > 0){
+        if (!game->dead_man && enemy->hp > 0){
             line_entity line = *line_arr;
             //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
             start_position.x += rnd(-0.5f, 0.5f);
@@ -1907,6 +1964,36 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
     }
     
     offsetting_on_death = 0;
+}
+
+void draw_win_sign(Game *game, screen_buffer *Buffer){
+    Vector2 screen_center_world = {game->world_size.x * 0.5f, get_camera_position().y + game->camera_screen_world_size.y* 0.5f};
+
+    line_entity line_1 = {};
+    line_1.line = {};
+    line_1.line.start_position = {screen_center_world.x, screen_center_world.y + 35};
+    line_1.line.end_position = {screen_center_world.x, screen_center_world.y - 35};
+    line_1.visual_start_width = 5.0f;
+    line_1.visual_end_width = 3.0f;
+    line_entity line_2 = {};
+    line_2.line = {};
+    line_2.line.start_position = {screen_center_world.x - 20, screen_center_world.y + 10};
+    line_2.line.end_position = {screen_center_world.x + 20, screen_center_world.y + 10};
+    line_2.visual_start_width = 3.0f;
+    line_2.visual_end_width = 3.0f;
+
+    line_1.line.start_position.x += rnd(-0.5f, 0.5f);
+    line_1.line.start_position.y += rnd(-0.5f, 0.5f);
+    line_1.line.end_position.x += rnd(-0.5f, 0.5f);
+    line_1.line.end_position.y += rnd(-0.5f, 0.5f);
+    
+    line_2.line.start_position.x += rnd(-0.5f, 0.5f);
+    line_2.line.start_position.y += rnd(-0.5f, 0.5f);
+    line_2.line.end_position.x += rnd(-0.5f, 0.5f);
+    line_2.line.end_position.y += rnd(-0.5f, 0.5f);
+
+    draw_line_gradient(game, Buffer, line_1.line.start_position, line_1.line.end_position, line_1.visual_start_width, line_1.visual_end_width, game->lighter_background_gradient);
+    draw_line_gradient(game, Buffer, line_2.line.start_position, line_2.line.end_position, line_2.visual_start_width, line_2.visual_end_width, game->lighter_background_gradient);
 }
 
 void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){

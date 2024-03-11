@@ -134,13 +134,15 @@ struct Player{
     };
     
     shooter shoot = {};
-        
+    
+    f32 damage_immune_countdown;
+    
     particle_emitter pole_ride_emitter;
     particle_emitter cleaning_emitter;
     particle_emitter charged_emitter;
     particle_emitter shoot_emitter;
     
-    f32 max_in_blood_time = 20;
+    f32 max_in_blood_time = 12;
     f32 in_blood_time;
     f32 in_blood_progress;
     f32 not_in_blood_time;
@@ -149,12 +151,13 @@ struct Player{
 struct spawn_data{
     f32 spawn_time;   
     i32 fly_enemies_count;
+    i32 blocker_enemies_count;
 };
 
-global_variable int SPAWN_COUNT = 6;
+global_variable int SPAWN_COUNT = 10;
 global_variable int current_spawn_index = 0;
-spawn_data spawns[6] = {
-    {5, 1}, {15, 2}, {30, 3}, {50, 2}, {70, 2}, {100, 3}
+spawn_data spawns[10] = {
+    {10, 1, 0}, {25, 2, 0}, {45, 1, 1}, {80, 3, 0}, {110, 2, 1}, {120, 0, 1}, {150, 4, 0}, {170, 1, 1}, {200, 2, 3}, {220, 1, 0}
 };
 
 enum TileType{
@@ -188,12 +191,12 @@ struct line_entity{
 
 struct Enemy{
     Entity entity;  
-    f32 hp = 12.0f;
+    f32 hp = 10.0f;
     b32 render_dead;
     b32 died;
     
     f32 time_in_blood;
-    f32 max_time_in_blood = 10;
+    f32 max_time_in_blood = 20;
     f32 in_blood_progress;
     
     Array lines;
@@ -298,14 +301,18 @@ struct Game{
     f32 shake_trauma_decrease = 0.7f;
     
     b32 im_dying_man = 0;
+    b32 dead_man = 0;
+    b32 we_got_a_winner = 0;
     
     i32 blockers_count;
+    i32 enemies_count;
     
     particle_emitter blood_emitter;
     particle_emitter dust_emitter;
     
     Gradient background_gradient;
     Gradient darker_background_gradient;
+    Gradient lighter_background_gradient;
     Gradient tiles_gradient;
     Gradient blood_gradient;
     Gradient pole_gradient;
@@ -362,12 +369,13 @@ void debug_update(Game *game);
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
 void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy);
+void draw_win_sign(Game *game, screen_buffer *Buffer);
 
 void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier);
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 speed_multiplier);
 
-global_variable b32 update_spawns;
+global_variable b32 update_spawns = 1;
 
 int level1[100][54] = {
     {0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
