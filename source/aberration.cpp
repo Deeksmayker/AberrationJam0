@@ -571,7 +571,7 @@ void InitGame(){
 }
 
 void Start(){
-    //add_blocker_enemy(&global_game, {30, 45});
+    add_blocker_enemy(&global_game, {30, 45});
 }
 
 global_variable f32 previous_delta = 0;
@@ -877,16 +877,19 @@ void update_player(Game *game){
             shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
         } else{
             if (game->blockers_count <= 0){
-                if (game->player.in_blood_time < game->player.max_in_blood_time * 0.7f){
-                    game->player.in_blood_time += game->player.max_in_blood_time * 0.1f;
+                if (game->player.in_blood_time < game->player.max_in_blood_time * 0.89f){
+                    game->player.in_blood_time += game->player.max_in_blood_time * (perfect_shoot ? 0.1f : 0.05f);
                 }
                 f32 count_multiplier = 0.05f;
                 if (perfect_shoot){
+                    shake_camera(game, 0.5f);
                     if (mega_cleaning){
-                        count_multiplier = 2.0f;
+                        count_multiplier = 1.0f;
                     } else{
                         count_multiplier = 1.0f;
                     }
+                } else{
+                    shake_camera(game, 0.25f);
                 }
                 emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, count_multiplier);
             } else{
@@ -982,8 +985,11 @@ void update_blocker_enemies(Game *game){
     for (int i = 0; i < game->blocker_enemies.count; i++){
         blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
         
+        if (blocker->enemy.hit_immune_countdown > 0){
+            blocker->enemy.hit_immune_countdown -= game->delta;
+        }
+        
         if (blocker->enemy.hp <= 0){
-            blocker->enemy.taked_hit = 0;
             if (!blocker->enemy.died){
                 game->blockers_count--;
                 game->enemies_count--;
@@ -1023,8 +1029,6 @@ void update_blocker_enemies(Game *game){
             f32 speed_multiplier = lerp(1.0f, 4.0f, blocker->enemy.in_blood_progress);
             update_overtime_emitter(game, &game->blood_emitter, {0, 0.5}, blocker->enemy.entity.position, count_multiplier, speed_multiplier);
         }
-        
-        blocker->enemy.taked_hit = 0;
     }
     
     game->player.failed_cleaning = 0;
@@ -1034,8 +1038,11 @@ void update_fly_enemies(Game *game){
     for (int i = 0; i < game->fly_enemies.count; i++){
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
         
+        if (fly->enemy.hit_immune_countdown > 0){
+            fly->enemy.hit_immune_countdown -= game->delta;
+        }
+        
         if (fly->enemy.hp <= 0){
-            fly->enemy.taked_hit = 0;
             if (!fly->enemy.died){
                 game->enemies_count--;
                 fly->enemy.died = 1;
@@ -1168,8 +1175,6 @@ void update_fly_enemies(Game *game){
         check_player_in_enemy(game, fly->enemy, direction_to_player);
                 
         loop_world_position(game, &fly->enemy.entity.position);
-        
-        fly->enemy.taked_hit = 0;
     }
 }
 
@@ -1712,12 +1717,11 @@ line_hits check_line_collision(Game *game, Line line, b32 perfect){
             in_some_collider = 1;
             hit_anything = 1;
             
-            if (!enemy_collision->taked_hit){
-                enemy_collision->taked_hit = 1;
+            if (enemy_collision->hit_immune_countdown <= 0){
+                enemy_collision->hit_immune_countdown = 0.07f;
                 enemy_collision->hp -= perfect ? game->player.pefrect_damage : game->player.damage;
                 hitstop_countdown += 0.1f;
                 shake_camera(game, 0.1f);
-
             }
         }
                         
@@ -1979,14 +1983,20 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
             line_arr->line.end_position   = subtract(enemy->entity.position, end_position);
         }
         
+        line_entity line = *line_arr;
+        //flickering
         if (!game->dead_man && enemy->hp > 0){
-            line_entity line = *line_arr;
             //f32 random_multiplier = ((f32)(rand() % 1000) * 0.0001f) - 0.5f;
             start_position.x += rnd(-0.5f, 0.5f);
             start_position.y += rnd(-0.5f, 0.5f);
             end_position.x   += rnd(-0.5f, 0.5f);
             end_position.y   += rnd(-0.5f, 0.5f);
             
+        }
+        
+        if (enemy->hit_immune_countdown > 0){
+            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, 0xf0f0f0);
+        } else if (!game->dead_man && enemy->hp > 0){
             draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
         } else{
             draw_line_gradient(game, Buffer, start_position, end_position, line_arr->visual_start_width, line_arr->visual_end_width, game->darker_background_gradient);

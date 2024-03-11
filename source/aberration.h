@@ -196,7 +196,7 @@ struct Enemy{
     f32 hp = 12.0f;
     b32 render_dead;
     b32 died;
-    b32 taked_hit;
+    f32 hit_immune_countdown;
     
     f32 time_in_blood;
     f32 max_time_in_blood = 20;
