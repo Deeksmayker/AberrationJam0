@@ -161,6 +161,10 @@ Win32MainWindowCallback(HWND Window,
                     */
                 } break;
                 
+                case 'T':{
+                    input.restart_key = IsDown;
+                } break;
+                
                 case VK_SPACE:{
                     input.jump_key = IsDown;  
                 } break;

@@ -43,6 +43,8 @@ struct Input{
     b32 mouse_left_key;
     b32 mouse_right_key;
     
+    b32 restart_key;
+    
     //Debug
     b32 g_key;
 };
@@ -330,6 +332,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer);
 void update(Game *game);
 void update_player(Game *game);
 void update_enemies_spawn(Game *game);
+void check_player_in_enemy(Game *game, Enemy enemy, Vector2 direction_to_player);
 void update_fly_enemies(Game *game);
 void update_blocker_enemies(Game *game);
 void update_fly_enemy_projectiles(Game *game);
@@ -360,9 +363,9 @@ void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
 void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy);
 
-void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
+void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier);
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
-void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position);
+void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 speed_multiplier);
 
 global_variable b32 update_spawns;
 

@@ -446,14 +446,14 @@ void InitGame(){
     *charged_emitter = {};
     charged_emitter->count_min        = 10;
     charged_emitter->count_max        = 30;
-    charged_emitter->speed_min        = 30;
-    charged_emitter->speed_max        = 70;
-    charged_emitter->scale_min        = 0.5;
-    charged_emitter->scale_max        = 1.2f;
-    charged_emitter->lifetime_min     = 0.5f;
-    charged_emitter->lifetime_max     = 1.0f;
+    charged_emitter->speed_min        = 40;
+    charged_emitter->speed_max        = 90;
+    charged_emitter->scale_min        = 0.3;
+    charged_emitter->scale_max        = 0.7f;
+    charged_emitter->lifetime_min     = 0.3f;
+    charged_emitter->lifetime_max     = 0.7f;
     charged_emitter->color            = sun_yellow;
-    charged_emitter->spread           = 0.4f;
+    charged_emitter->spread           = 0.9f;
     charged_emitter->shape            = (particle_shape)1;
     charged_emitter->try_splash       = 0;
     charged_emitter->splash_chance    = 0;
@@ -569,6 +569,11 @@ void Start(){
 global_variable f32 previous_delta = 0;
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
+/*
+    if (input.restart_key){
+        InitGame();
+    }
+*/
 /*
     local_persist b32 previous_g = 0;
     if (input.g_key && !previous_g){
@@ -731,7 +736,7 @@ void update_player(Game *game){
             }
             
             f32 speed_progress = abs(game->player.velocity.x) * 0.01f;
-            update_overtime_emitter(game, &game->dust_emitter, dust_particles_direction, subtract(player->entity.position, {0, 1}), lerp(1.0f, 10.0f, speed_progress)); 
+            update_overtime_emitter(game, &game->dust_emitter, dust_particles_direction, subtract(player->entity.position, {0, 1}), lerp(1.0f, 10.0f, speed_progress), 1); 
         }
     }
     
@@ -926,6 +931,8 @@ void update_blocker_enemies(Game *game){
     for (int i = 0; i < game->blocker_enemies.count; i++){
         blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
         
+        Vector2 vector_to_player = subtract(game->player.entity.position, blocker->enemy.entity.position);
+        
         if (blocker->enemy.hp <= 0){
             if (!blocker->enemy.died){
                 game->blockers_count--;
@@ -949,6 +956,19 @@ void update_blocker_enemies(Game *game){
             visual_line.max_lifetime = 0.7f;
             
             array_add(&game->line_entities, &visual_line);
+        }
+        
+        if (in_blood(blocker->enemy.entity)){
+            blocker->enemy.time_in_blood += game->delta;
+            blocker->enemy.in_blood_progress = clamp01(blocker->enemy.time_in_blood / blocker->enemy.max_time_in_blood);
+        }
+        
+        check_player_in_enemy(game, blocker->enemy, vector_to_player);
+
+        if (blocker->enemy.time_in_blood > 0){
+            f32 count_multiplier = lerp(0.0f, 4.0f, blocker->enemy.in_blood_progress);
+            f32 speed_multiplier = lerp(1.0f, 4.0f, blocker->enemy.in_blood_progress);
+            update_overtime_emitter(game, &game->blood_emitter, {0, 0.5}, blocker->enemy.entity.position, count_multiplier, speed_multiplier);
         }
     }
     
@@ -975,7 +995,7 @@ void update_fly_enemies(Game *game){
         }
         
         //blood progress multipliers
-        update_overtime_emitter(game, &game->blood_emitter, {0, 1}, fly->enemy.entity.position, fly->enemy.in_blood_progress);
+        update_overtime_emitter(game, &game->blood_emitter, {0, 1}, fly->enemy.entity.position, fly->enemy.in_blood_progress, 1);
         fly->charge_duration = lerp(fly->start_charge_duration, fly->start_charge_duration * 0.5f, fly->enemy.in_blood_progress);
         fly->strafe_duration = lerp(fly->start_strafe_duration, fly->start_strafe_duration * 0.5f, fly->enemy.in_blood_progress);
         fly->circle_speed = lerp(fly->start_circle_speed, fly->start_circle_speed * 3.0f, fly->enemy.in_blood_progress);
@@ -1086,20 +1106,24 @@ void update_fly_enemies(Game *game){
             }
         }
         
-        if (check_box_collision(&fly->enemy.entity, &game->player.entity)){
-            //Enemy hit player
-            game->player.velocity.y += 60;
-            emit_particles(game, game->blood_emitter, direction_to_player, game->player.entity.position, 1);
-            shake_camera(game, 0.6f);
-            
-            game->color_change_countdown = 0.05f;
-            game->current_color_palette = 0xFF8F8F;
-            
-            hitstop_countdown += 0.2f;
-            clamp(&hitstop_countdown, 0, 1);
-        }
-        
+        check_player_in_enemy(game, fly->enemy, direction_to_player);
+                
         loop_world_position(game, &fly->enemy.entity.position);
+    }
+}
+
+void check_player_in_enemy(Game *game, Enemy enemy, Vector2 direction_to_player){
+    if (check_box_collision(&enemy.entity, &game->player.entity)){
+        //Enemy hit player
+        game->player.velocity.y += 60;
+        emit_particles(game, game->blood_emitter, direction_to_player, game->player.entity.position, 1);
+        shake_camera(game, 0.6f);
+        
+        game->color_change_countdown = 0.05f;
+        game->current_color_palette = 0xFF8F8F;
+        
+        hitstop_countdown += 0.2f;
+        clamp(&hitstop_countdown, 0, 1);
     }
 }
 
@@ -1321,7 +1345,7 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                     player->riding_pole = 1;
                     shake_camera(game, game->delta * 0.3f);
                     
-                    update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position, 1);
+                    update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position, 1, 1);
                 }
             } break;
         }
@@ -1822,21 +1846,21 @@ void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vec
     count *= count_multiplier; 
     
     for (int i = 0; i < count; i++){
-        shoot_particle(game, emitter, direction, start_position);
+        shoot_particle(game, emitter, direction, start_position, 1);
     }
 }
 
-void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){
+void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier){
     emitter->emitting_timer += game->delta;
     f32 emit_delay = 1.0f / (emitter->per_second * count_multiplier);
     while (emitter->emitting_timer >= emit_delay){
         emitter->emitting_timer -= emit_delay;
-        shoot_particle(game, *emitter, direction, start_position);
+        shoot_particle(game, *emitter, direction, start_position, speed_multiplier);
     }
 }
 
 
-void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position){
+void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 speed_multiplier){
     rnd_state = (rnd_state + 1) * 3;
     Particle particle = {};
     particle.entity = {};
@@ -1855,7 +1879,7 @@ void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vec
     Vector2 randomized_direction = {x_direction, y_direction};
                                     
     rnd_state = (rnd_state + 1) * 3;
-    f32 randomized_speed = rnd(emitter.speed_min, emitter.speed_max);
+    f32 randomized_speed = rnd(emitter.speed_min * speed_multiplier, emitter.speed_max * speed_multiplier);
     
     rnd_state = (rnd_state + 1) * 3;
     f32 lifetime = rnd(emitter.lifetime_min, emitter.lifetime_max);
