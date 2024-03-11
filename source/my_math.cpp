@@ -254,3 +254,7 @@ f32 EaseInCirc(f32 x){
 f32 EaseInQuint(f32 x){
     return x * x * x * x * x;
 }
+
+f32 EaseInSine(f32 x){
+  return 1.0f - cos((x * PI) / 2.0f);
+}

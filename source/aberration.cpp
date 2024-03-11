@@ -90,13 +90,12 @@ void draw_world_rect(Game *game, screen_buffer *Buffer, Vector2 position, Vector
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             color &= game->current_color_palette;
-            color = lerp_color(color, 0xFF0A0A, sqrt(game->player.in_blood_progress));
+            color = lerp_color(color, 0xFF0A0A, EaseInSine(game->player.in_blood_progress));
             
             *pixel++ = color;
         }
         row += Buffer->Pitch;
     }
-    
 }
 
 
@@ -245,7 +244,7 @@ void fill_background(Game *game, screen_buffer *Buffer, Gradient gradient){
             u32 color = lerp_gradient(gradient, real_fraction);                  
             
             color &= game->current_color_palette;
-            color = lerp_color(color, 0xFF0A0A, sqrt(game->player.in_blood_progress));
+            color = lerp_color(color, 0xFF0A0A, EaseInSine(game->player.in_blood_progress));
             
             *Pixel++ = color;
         }
@@ -424,20 +423,20 @@ void InitGame(){
     
     particle_emitter *cleaning_emitter = &global_game.player.cleaning_emitter;
     *cleaning_emitter = {};
-    cleaning_emitter->count_min        = 30;
-    cleaning_emitter->count_max        = 80;
-    cleaning_emitter->speed_min        = 40;
+    cleaning_emitter->count_min        = 60;
+    cleaning_emitter->count_max        = 100;
+    cleaning_emitter->speed_min        = 60;
     cleaning_emitter->speed_max        = 150;
     cleaning_emitter->scale_min        = 1.0f;
-    cleaning_emitter->scale_max        = 3.0f;
+    cleaning_emitter->scale_max        = 4.0f;
     cleaning_emitter->lifetime_min     = 1.0f;
     cleaning_emitter->lifetime_max     = 2.0f;
     cleaning_emitter->color            = 0xffffff;
-    cleaning_emitter->spread           = 0.4f;
-    cleaning_emitter->shape            = (particle_shape)1;
+    cleaning_emitter->spread           = 0.9f;
+    cleaning_emitter->shape            = (particle_shape)0;
     cleaning_emitter->try_splash       = 1;
     cleaning_emitter->splash_chance    = 0.8f;
-    cleaning_emitter->colliding_chance = 1.0f;
+    cleaning_emitter->colliding_chance = 0.35f;
     cleaning_emitter->per_second       = 10;
     
     u32 sun_yellow = 0xFFDF22;
@@ -674,7 +673,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     
     camera_target_y += additional_vertical_position * 0.3f;
     
-    if (global_game.we_got_a_winner){
+    if (global_game.we_got_a_winner || global_game.dead_man){
         camera_position.y += global_game.delta * 10;
     } else{
         camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 10);
@@ -706,8 +705,8 @@ void update(Game *game){
 Vector2 get_random_offscreen_position(Game *game){
     b32 spawn_up = rnd() % 256 < 128;
     f32 x_position = rnd(0.0f, game->world_size.x);
-    f32 y_position = get_camera_position().y + rnd(game->camera_screen_world_size.y * 0.6f,
-                                                   game->camera_screen_world_size.y * 1.1f);
+    f32 y_position = get_camera_position().y + rnd(game->camera_screen_world_size.y * 1.2f,
+                                                   game->camera_screen_world_size.y * 1.7f);
     Vector2 position = {x_position, y_position};
     
     return position;
@@ -716,6 +715,9 @@ Vector2 get_random_offscreen_position(Game *game){
 void update_enemies_spawn(Game *game){
     if (current_spawn_index >= SPAWN_COUNT && game->enemies_count <= 0 && !game->we_got_a_winner){
         game->we_got_a_winner = 1;
+        shake_camera(game, 1.0f);
+        game->color_change_countdown = 0.05f;
+        game->current_color_palette = 0xFF8F8F;
     }
 
     if (!update_spawns || current_spawn_index >= SPAWN_COUNT){
@@ -837,7 +839,7 @@ void update_player(Game *game){
         shoot->holding_cleaning = 0;
         shoot->perfect_charged = 0;
         
-        f32 current_perfect_buffer = shooting ? shoot->perfect_buffer : (shoot->perfect_buffer * 0.25f);
+        f32 current_perfect_buffer = shooting ? shoot->perfect_buffer : (shoot->perfect_buffer * 0.5f);
         
         b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
                          && shoot->holding_timer <= (shoot->perfect_hold_time + current_perfect_buffer);
@@ -860,14 +862,16 @@ void update_player(Game *game){
             
             Vector2 recoil_vector = multiply(recoil_direction, perfect_shoot ? shoot-> push_force : shoot->push_force * 0.3f); 
         */
-            add(&player->velocity, multiply({0, 1}, perfect_shoot ? shoot->push_force : shoot->push_force * 0.3f));
+            //add(&player->velocity, multiply({0, 1}, perfect_shoot ? shoot->push_force : shoot->push_force * 0.3f));
         }
-
+        
+        add(&player->velocity, multiply({0, 1}, perfect_shoot ? shoot->push_force : shoot->push_force * 0.3f));
         
         if (shooting){
             shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
         } else{
             if (game->blockers_count <= 0){
+                game->player.in_blood_time += game->player.max_in_blood_time *0.1f;
                 emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.05f);
             } else{
                 game->player.failed_cleaning = 1;
@@ -1413,6 +1417,7 @@ void check_player_collisions(Game *game){
         
         if (game->player.in_blood_time >= game->player.max_in_blood_time){
             game->dead_man = 1;
+            shake_camera(game, 1);
         }
     } else{
         game->player.not_in_blood_time += game->delta;

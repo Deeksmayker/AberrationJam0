@@ -191,7 +191,7 @@ struct line_entity{
 
 struct Enemy{
     Entity entity;  
-    f32 hp = 10.0f;
+    f32 hp = 12.0f;
     b32 render_dead;
     b32 died;
     
