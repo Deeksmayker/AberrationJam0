@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <string.h>
 
+//#include <mmsystem.h>
+//#pragma comment(lib, "winmm.lib")
+
 #define global_variable static
 #define local_persist   static
 #define internal        static
@@ -260,6 +263,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      LPSTR CommandLine,
                      int ShowCode)
  {
+    
+    //PlaySound("Aboba.wav", NULL, SND_SYNC);
+ 
     LARGE_INTEGER PerfCountFrequencyResult;
     QueryPerformanceFrequency(&PerfCountFrequencyResult);
     i64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;

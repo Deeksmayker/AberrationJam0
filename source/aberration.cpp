@@ -839,13 +839,19 @@ void update_player(Game *game){
         shoot->holding_cleaning = 0;
         shoot->perfect_charged = 0;
         
-        f32 current_perfect_buffer = shooting ? shoot->perfect_buffer : (shoot->perfect_buffer * 0.5f);
+        f32 current_perfect_buffer = shooting ? shoot->perfect_buffer : (shoot->perfect_buffer);// * 0.5f);
         
         b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
                          && shoot->holding_timer <= (shoot->perfect_hold_time + current_perfect_buffer);
-                         
+        
+        
         shoot->just_shoot = perfect_shoot ? 2 : 1;
         player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
+        
+        b32 mega_cleaning = 0;
+        if (cleaning && perfect_shoot && shoot->holding_timer <= (shoot->perfect_hold_time + shoot->perfect_buffer * 0.3f)){
+            mega_cleaning = 1;
+        }
         
         shoot->holding_timer = 0;
         
@@ -871,8 +877,18 @@ void update_player(Game *game){
             shoot_rifle(game, player, shoot, player_to_mouse, perfect_shoot);
         } else{
             if (game->blockers_count <= 0){
-                game->player.in_blood_time += game->player.max_in_blood_time *0.1f;
-                emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, perfect_shoot ? 1.0f : 0.05f);
+                if (game->player.in_blood_time < game->player.max_in_blood_time * 0.7f){
+                    game->player.in_blood_time += game->player.max_in_blood_time * 0.1f;
+                }
+                f32 count_multiplier = 0.05f;
+                if (perfect_shoot){
+                    if (mega_cleaning){
+                        count_multiplier = 2.0f;
+                    } else{
+                        count_multiplier = 1.0f;
+                    }
+                }
+                emit_particles(game, player->cleaning_emitter, player_to_mouse, player->entity.position, count_multiplier);
             } else{
                 game->player.failed_cleaning = 1;
                 shake_camera(game, 0.5f);
@@ -916,7 +932,7 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
     array_add(&game->line_entities, &visual_line);
     
     //@TODO: Free this hits
-    line_hits hits = check_line_collision(game, line);
+    line_hits hits = check_line_collision(game, line, perfect_shoot);
     int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
     
     for (int i = 0; i < collision_count; i++){
@@ -955,11 +971,6 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
                 subtract(&wall_visual_line.line.start_position, hits.enemy_hits[i]->entity.position);
                 subtract(&wall_visual_line.line.end_position, hits.enemy_hits[i]->entity.position);
                 array_add(&hits.enemy_hits[i]->lines, &wall_visual_line);
-                
-                hits.enemy_hits[i]->hp -= perfect_shoot ? shoot->pefrect_damage : shoot->damage;
-                
-                hitstop_countdown += 0.1f;
-                shake_camera(game, 0.1f);
             }
         }
     }
@@ -971,9 +982,8 @@ void update_blocker_enemies(Game *game){
     for (int i = 0; i < game->blocker_enemies.count; i++){
         blocker_enemy *blocker = (blocker_enemy *)array_get(&game->blocker_enemies, i);
         
-        Vector2 vector_to_player = subtract(game->player.entity.position, blocker->enemy.entity.position);
-        
         if (blocker->enemy.hp <= 0){
+            blocker->enemy.taked_hit = 0;
             if (!blocker->enemy.died){
                 game->blockers_count--;
                 game->enemies_count--;
@@ -981,6 +991,8 @@ void update_blocker_enemies(Game *game){
             }
             continue;
         }
+        
+        Vector2 vector_to_player = subtract(game->player.entity.position, blocker->enemy.entity.position);
         
         if (game->player.failed_cleaning){
             Line line = {};
@@ -1011,6 +1023,8 @@ void update_blocker_enemies(Game *game){
             f32 speed_multiplier = lerp(1.0f, 4.0f, blocker->enemy.in_blood_progress);
             update_overtime_emitter(game, &game->blood_emitter, {0, 0.5}, blocker->enemy.entity.position, count_multiplier, speed_multiplier);
         }
+        
+        blocker->enemy.taked_hit = 0;
     }
     
     game->player.failed_cleaning = 0;
@@ -1021,6 +1035,7 @@ void update_fly_enemies(Game *game){
         fly_enemy *fly = (fly_enemy *)array_get(&game->fly_enemies, i);
         
         if (fly->enemy.hp <= 0){
+            fly->enemy.taked_hit = 0;
             if (!fly->enemy.died){
                 game->enemies_count--;
                 fly->enemy.died = 1;
@@ -1153,6 +1168,8 @@ void update_fly_enemies(Game *game){
         check_player_in_enemy(game, fly->enemy, direction_to_player);
                 
         loop_world_position(game, &fly->enemy.entity.position);
+        
+        fly->enemy.taked_hit = 0;
     }
 }
 
@@ -1656,7 +1673,7 @@ b32 check_box_collision(Entity *rect1, Entity *rect2){
     return solution;
 }
 
-line_hits check_line_collision(Game *game, Line line){
+line_hits check_line_collision(Game *game, Line line, b32 perfect){
     Vector2 vector_to_end = subtract(line.end_position, line.start_position);
     int points_count = (((int)magnitude(vector_to_end) + 10) * 4);
     
@@ -1694,6 +1711,14 @@ line_hits check_line_collision(Game *game, Line line){
             
             in_some_collider = 1;
             hit_anything = 1;
+            
+            if (!enemy_collision->taked_hit){
+                enemy_collision->taked_hit = 1;
+                enemy_collision->hp -= perfect ? game->player.pefrect_damage : game->player.damage;
+                hitstop_countdown += 0.1f;
+                shake_camera(game, 0.1f);
+
+            }
         }
                         
         for (int y = 0; y < game->tilemap.rows && !hit_anything; y++){
