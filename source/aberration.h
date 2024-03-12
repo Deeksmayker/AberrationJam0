@@ -380,12 +380,20 @@ void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 dire
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 speed_multiplier);
 
-int notes_count = 21;
+int notes_count = 49;
 int current_note_index = 0;
-char notes[21][3] = {
+char notes1[21][3] = {
     "a5", "b5", "c5", "d5", "e5", "f5", "g5", 
     "a4", "b4", "c4", "d4", "e4", "f4", "g4", 
     "a3", "b3", "c3", "d3", "e3", "f3", "g3" 
+};
+
+char notes[49][3] = {
+    "e5", "g4", "e5", "d5", "c5", "b5", "a5", "g4", "b5", "g5",
+    "c5", "f5", "a5", "e5", "a5", "d5", "f5", "g5", "c5", "c5", 
+    "e5", "f5", "c5", "f5", "a4", "c3", "e5", "c4", "c5", "e4",
+    "g5", "c4", "f5", "c4", "f5", "a4", "c3", "g4", "a4", "c5", 
+    "e4", "a4", "c5", "e4", "a5", "e5", "a4", "d4", "c5"
 };
 
 global_variable b32 update_spawns = 1;
