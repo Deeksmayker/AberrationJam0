@@ -1109,7 +1109,7 @@ void update_fly_enemies(Game *game){
             charge_line.line.start_position = fly->enemy.entity.position;
             
             if (charge_progress < 0.8f){
-                fly->charge_end_position = add(fly->enemy.entity.position, multiply(direction_to_player, distance_to_player * 1.3f));
+                fly->charge_end_position = add(fly->enemy.entity.position, multiply(direction_to_player, distance_to_player * 1.1f));
             }
             
             charge_line.line.end_position = fly->charge_end_position;
