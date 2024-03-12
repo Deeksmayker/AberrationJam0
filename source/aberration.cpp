@@ -570,6 +570,7 @@ void InitGame(){
     global_game.pole_gradient.colors[4] = pale_green;
     global_game.pole_gradient.colors_count = 5;
     
+    /*
     u32 pale_pink = 0xfadadd;
     u32 violet = 0xbf8bff;
     
@@ -581,6 +582,7 @@ void InitGame(){
     global_game.fly_enemies_gradient.colors[3] = violet;
     global_game.fly_enemies_gradient.colors[4] = blood_dark;
     global_game.fly_enemies_gradient.colors_count = 5;
+    */
 }
 
 void Start(){
@@ -590,14 +592,38 @@ void Start(){
 
 }
 
+void ReloadGame(){
+    array_free(&global_game.entities);
+    array_free(&global_game.particles);
+    array_free(&global_game.line_entities);
+    array_free(&global_game.fly_enemies);
+    array_free(&global_game.fly_enemy_projectiles);
+    array_free(&global_game.blocker_enemies);
+    
+    for (int i = 0; i < global_game.world_size.y * unit_size; i++){
+        free(splash_buffer[i]);
+    }
+
+    free(splash_buffer);
+    
+    free(global_game.background_gradient.colors);
+    free(global_game.darker_background_gradient.colors);
+    free(global_game.lighter_background_gradient.colors);
+    free(global_game.tiles_gradient.colors);
+    free(global_game.blood_gradient.colors);
+    free(global_game.pole_gradient.colors);
+    
+    InitGame();
+}
+
 global_variable f32 previous_delta = 0;
 
 void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
-/*
+
     if (input.restart_key){
-        InitGame();
+        ReloadGame();
     }
-*/
+
 /*
     local_persist b32 previous_g = 0;
     if (input.g_key && !previous_g){
@@ -708,7 +734,7 @@ void update(Game *game){
     update_blocker_enemies(game);
     update_particles(game);
     update_camera_shake(game);
-    debug_update(game);
+    //debug_update(game);
     
     //platform_update_audio(game->delta);
 

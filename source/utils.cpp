@@ -16,6 +16,10 @@ Array array_init(size_t size, int count = 10){
     return array;
 }
 
+void array_free(Array *array){
+    free(array->data);
+}
+
 u8 *array_get(Array *array, int index){
     return (array->data) + index * array->size;
 }
