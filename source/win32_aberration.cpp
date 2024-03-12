@@ -37,6 +37,8 @@ void play_sound(char *name);
 void play_sound_nostop(char *name);
 void stop_sounds();
 
+b32 in_fullscreen;
+
 #include "aberration.cpp"
 
 #include <windows.h>
@@ -112,6 +114,60 @@ Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int WindowHeight,
                   &Buffer->Info,
                   DIB_RGB_COLORS, SRCCOPY);
 }
+
+bool enterFullscreen(HWND hwnd){
+    HDC windowHDC = GetDC(hwnd);
+    int fullscreenWidth  = GetDeviceCaps(windowHDC, DESKTOPHORZRES);
+    int fullscreenHeight = GetDeviceCaps(windowHDC, DESKTOPVERTRES);
+    int colourBits       = GetDeviceCaps(windowHDC, BITSPIXEL);
+    int refreshRate      = GetDeviceCaps(windowHDC, VREFRESH);
+
+    DEVMODE fullscreenSettings;
+    bool isChangeSuccessful;
+    RECT windowBoundary;
+
+    EnumDisplaySettings(NULL, 0, &fullscreenSettings);
+    fullscreenSettings.dmPelsWidth        = fullscreenWidth;
+    fullscreenSettings.dmPelsHeight       = fullscreenHeight;
+    fullscreenSettings.dmBitsPerPel       = colourBits;
+    fullscreenSettings.dmDisplayFrequency = refreshRate;
+    fullscreenSettings.dmFields           = DM_PELSWIDTH |
+                                            DM_PELSHEIGHT |
+                                            DM_BITSPERPEL |
+                                            DM_DISPLAYFREQUENCY;
+
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW | WS_EX_TOPMOST);
+    SetWindowLongPtr(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, fullscreenWidth, fullscreenHeight, SWP_SHOWWINDOW);
+    isChangeSuccessful = ChangeDisplaySettings(&fullscreenSettings, CDS_FULLSCREEN) == DISP_CHANGE_SUCCESSFUL;
+    ShowWindow(hwnd, SW_MAXIMIZE);
+    
+    in_fullscreen = 1;
+
+    return isChangeSuccessful;
+}
+
+bool exitFullscreen(HWND hwnd) {
+    bool isChangeSuccessful;
+    
+    int windowX = 0;
+    int windowY = 0;
+    int windowedWidth = 1280;
+    int windowedHeight = 720;
+    int windowedPaddingX = 0;
+    int windowedPaddingY = 0;
+
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, WS_EX_LEFT);
+    SetWindowLongPtr(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+    isChangeSuccessful = ChangeDisplaySettings(NULL, CDS_RESET) == DISP_CHANGE_SUCCESSFUL;
+    SetWindowPos(hwnd, HWND_NOTOPMOST, windowX, windowY, windowedWidth + windowedPaddingX, windowedHeight + windowedPaddingY, SWP_SHOWWINDOW);
+    ShowWindow(hwnd, SW_RESTORE);
+    
+    in_fullscreen = 0;
+
+    return isChangeSuccessful;
+}
+
 
 LRESULT CALLBACK
 Win32MainWindowCallback(HWND Window,
@@ -195,6 +251,14 @@ Win32MainWindowCallback(HWND Window,
             bool AltKeyWasDown = (LParam & (1 << 29)) != 0;
             if (VKCode == VK_F4 && AltKeyWasDown){
                 GlobalRunning = false;
+            }
+            
+            if (VKCode == VK_RETURN && AltKeyWasDown && !WasDown){
+                if (in_fullscreen){
+                    exitFullscreen(Window);
+                } else{
+                    enterFullscreen(Window);
+                }
             }
         } break;
         
@@ -312,6 +376,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
         //printf("oshibkaa");
         //@TODO: Handle error in window allocation
     }
+    
+    
+    enterFullscreen(Window);
     
     LARGE_INTEGER LastCounter;
     QueryPerformanceCounter(&LastCounter);
