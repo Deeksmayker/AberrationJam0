@@ -320,6 +320,8 @@ struct Game{
     Gradient blood_gradient;
     Gradient pole_gradient;
     Gradient fly_enemies_gradient;
+    
+    b32 playing_ambient;
 };
 
 global_variable Vector2 camera_position;
@@ -377,6 +379,14 @@ void draw_win_sign(Game *game, screen_buffer *Buffer);
 void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier);
 void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 speed_multiplier);
+
+int notes_count = 21;
+int current_note_index = 0;
+char notes[21][3] = {
+    "a5", "b5", "c5", "d5", "e5", "f5", "g5", 
+    "a4", "b4", "c4", "d4", "e4", "f4", "g4", 
+    "a3", "b3", "c3", "d3", "e3", "f3", "g3" 
+};
 
 global_variable b32 update_spawns = 1;
 

@@ -36,5 +36,3 @@ void array_remove(Array *array, int index){
     
     array->count--;
 }
-
-

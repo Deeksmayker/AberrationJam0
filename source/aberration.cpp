@@ -3,6 +3,7 @@ global_variable u32 rand_seed = 0;
 #include "utils.cpp"
 #include "aberration.h"
 #include "my_math.cpp"
+//#include "sound.h"
 
 Game global_game;
 
@@ -319,6 +320,18 @@ b32 in_blood(Entity entity){
 
 
 void InitGame(){
+/*
+    BumpAllocator transientStorage = make_bump_allocator(MB(50));
+    BumpAllocator persistentStorage = make_bump_allocator(MB(256));
+    
+    soundState = (SoundState*)bump_alloc(&persistentStorage, sizeof(SoundState));
+    soundState->transientStorage = &transientStorage;
+    soundState->allocatedsoundsBuffer = bump_alloc(&persistentStorage, SOUNDS_BUFFER_SIZE);
+*/
+    //init_sound_states();
+    //platform_init_audio();
+    
+    
     global_game = {};
     global_game.entities = array_init(sizeof(Entity));
     
@@ -571,7 +584,10 @@ void InitGame(){
 }
 
 void Start(){
-    add_blocker_enemy(&global_game, {30, 45});
+    //add_blocker_enemy(&global_game, {30, 45});
+    
+    //play_sound("lightHit", SOUND_OPTION_LOOP);
+
 }
 
 global_variable f32 previous_delta = 0;
@@ -693,6 +709,8 @@ void update(Game *game){
     update_particles(game);
     update_camera_shake(game);
     debug_update(game);
+    
+    //platform_update_audio(game->delta);
 
     game->player.entity.position.x += game->player.velocity.x * game->delta;
     game->player.entity.position.y += game->player.velocity.y * game->delta;
@@ -716,6 +734,7 @@ void update_enemies_spawn(Game *game){
     if (current_spawn_index >= SPAWN_COUNT && game->enemies_count <= 0 && !game->we_got_a_winner){
         game->we_got_a_winner = 1;
         shake_camera(game, 1.0f);
+        play_sound("ClairDeLune");
         game->color_change_countdown = 0.05f;
         game->current_color_palette = 0xFF8F8F;
     }
@@ -826,6 +845,9 @@ void update_player(Game *game){
         
         if (shoot->holding_timer >= shoot->perfect_hold_time && !shoot->perfect_charged){
             shoot->perfect_charged = 1;
+            if (!game->we_got_a_winner && !game->playing_ambient){
+                play_sound(notes[current_note_index]);
+            }
             
             emit_particles(game, game->player.charged_emitter, player_to_mouse, add(player->entity.position, player_to_mouse), 1.0f);
             
@@ -844,6 +866,16 @@ void update_player(Game *game){
         b32 perfect_shoot = shoot->holding_timer >= shoot->perfect_hold_time - 0.05f
                          && shoot->holding_timer <= (shoot->perfect_hold_time + current_perfect_buffer);
         
+        if (perfect_shoot){
+            if (shoot->holding_timer >= shoot->perfect_hold_time - 0.05f && shoot->holding_timer < shoot->perfect_hold_time){
+                if (!game->we_got_a_winner && !game->playing_ambient){
+                    play_sound(notes[current_note_index]);
+                }
+            }
+            
+            current_note_index++;
+            current_note_index %= notes_count;
+        }
         
         shoot->just_shoot = perfect_shoot ? 2 : 1;
         player->shoot.cooldown_timer = perfect_shoot ? 0.1f : player->shoot.cooldown;
@@ -1433,6 +1465,11 @@ void check_player_collisions(Game *game){
     if (!game->we_got_a_winner && in_blood(game->player.entity)){
         game->player.in_blood_time += game->delta;
         
+        if (!game->playing_ambient && game->player.in_blood_time >= game->player.max_in_blood_time * 0.85f){
+            play_sound("Ambient1");
+            game->playing_ambient = 1;
+        }
+        
         game->player.not_in_blood_time = 0;
         //shake_camera(game, game->delta);
         game->im_dying_man = 1;
@@ -1446,6 +1483,11 @@ void check_player_collisions(Game *game){
         game->im_dying_man = 0;
         if (game->player.not_in_blood_time > 2){
             game->player.in_blood_time -= game->delta;
+            
+            if (!game->we_got_a_winner && game->playing_ambient){
+                stop_sounds();
+                game->playing_ambient = 0;
+            }
         }
     }
     
@@ -1722,6 +1764,11 @@ line_hits check_line_collision(Game *game, Line line, b32 perfect){
                 enemy_collision->hp -= perfect ? game->player.pefrect_damage : game->player.damage;
                 hitstop_countdown += 0.1f;
                 shake_camera(game, 0.1f);
+                /*
+                if (!game->playing_ambient){
+                    play_sound("audio/lightHit.wav");
+                }
+                */
             }
         }
                         

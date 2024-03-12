@@ -31,6 +31,12 @@ typedef double f64;
 global_variable int game_width_pixels = 640;
 global_variable int game_height_pixels = 360;
 
+global_variable f32 musicVolume = 100.0f;
+
+void play_sound(char *name);
+void play_sound_nostop(char *name);
+void stop_sounds();
+
 #include "aberration.cpp"
 
 #include <windows.h>
@@ -263,9 +269,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      LPSTR CommandLine,
                      int ShowCode)
  {
-    
-    //PlaySound("Aboba.wav", NULL, SND_SYNC);
  
+    //mciSendString("play lightHit.wav wait",NULL,0,0);
+    
     LARGE_INTEGER PerfCountFrequencyResult;
     QueryPerformanceFrequency(&PerfCountFrequencyResult);
     i64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
@@ -367,3 +373,23 @@ int CALLBACK WinMain(HINSTANCE Instance,
     return (0);
 }
 
+char path[7] = "audio/";
+char extension[5] = ".wav";
+
+void play_sound(char *name){
+    //char *full_path = malloc(strlen(name) + 5 + 4);
+    char result[] = "";
+    strcat(result, path);
+    strcat(result, name);
+    strcat(result, extension);
+    
+    PlaySound(result, NULL, SND_ASYNC);
+}
+
+void play_sound_nostop(char *name){
+    PlaySound(name, NULL, SND_ASYNC | SND_NOSTOP);
+}
+
+void stop_sounds(){
+    PlaySound(NULL, 0, 0);
+}
