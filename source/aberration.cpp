@@ -1067,8 +1067,43 @@ void kill_all_shields(Game *game, shield_enemy *shieldman){
         
         if (!shield->died){
             shield->stopping_shoot = 0;
+            shield->hp = 0;
             shield->died = 1;
         }
+    }
+}
+
+void update_shields(Game *game, shield_enemy *shieldman){
+    Vector2 vector_to_player = subtract(game->player.entity.position, shieldman->enemy.entity.position);
+
+    for (int j = 0; j < shieldman->shields.count; j++){
+        Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
+        
+        if (shield->hit_immune_countdown > 0){
+            shield->hit_immune_countdown -= game->delta;
+        }
+        
+        if (shield->hp <= 0){
+            if (!shield->died){
+                shield->stopping_shoot = 0;
+                shield->died = 1;
+            }
+            continue;
+        }
+        
+        Vector2 target_shield_position = shieldman->enemy.entity.position;
+        
+        if (shield->entity.position.y > target_shield_position.y){
+            target_shield_position.y += shieldman->enemy.entity.scale.y;
+        } else{
+            target_shield_position.y -= shieldman->enemy.entity.scale.y;
+        }
+        
+        shield->entity.position = lerp(shield->entity.position, target_shield_position, game->delta * 10);
+        
+        loop_world_position(game, &shield->entity.position);
+        
+        check_player_in_enemy(game, *shield, vector_to_player);
     }
 }
 
@@ -1088,6 +1123,7 @@ void update_shield_enemies(Game *game){
                 shieldman->enemy.died = 1;
                 kill_all_shields(game, shieldman);
             }
+            update_shields(game, shieldman);
             continue;
         }
         
@@ -1110,38 +1146,9 @@ void update_shield_enemies(Game *game){
         add(&shieldman->enemy.entity.position, multiply(shieldman->velocity, game->delta));
         
         loop_world_position(game, &shieldman->enemy.entity.position);
-        
-        for (int j = 0; j < shieldman->shields.count; j++){
-            Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
-            
-            if (shield->hit_immune_countdown > 0){
-                shield->hit_immune_countdown -= game->delta;
-            }
-            
-            if (shield->hp <= 0){
-                if (!shield->died){
-                    shield->stopping_shoot = 0;
-                    shield->died = 1;
-                }
-                continue;
-            }
-            
-            Vector2 target_shield_position = shieldman->enemy.entity.position;
-            
-            if (shield->entity.position.y > target_shield_position.y){
-                target_shield_position.y += shieldman->enemy.entity.scale.y;
-            } else{
-                target_shield_position.y -= shieldman->enemy.entity.scale.y;
-            }
-            
-            shield->entity.position = lerp(shield->entity.position, target_shield_position, game->delta * 5);
-            
-            loop_world_position(game, &shield->entity.position);
-            
-            check_player_in_enemy(game, *shield, vector_to_player);
-        }
+                
+        update_shields(game, shieldman);
     }
-
 }
 
 void update_blocker_enemies(Game *game){
@@ -1508,6 +1515,43 @@ void add_fly_enemy(Game *game, Vector2 position){
     array_add(&global_game.fly_enemies, &fly);
 }
 
+void draw_shield(Game *game, Enemy *shield, Vector2 shieldman_scale){
+    shield->lines = array_init(sizeof(line_entity), 100);
+    
+    line_entity triangle_line_1 = {};
+    triangle_line_1.line = {};
+    triangle_line_1.line.start_position = {-shieldman_scale.x * 0.5f, 0};
+    triangle_line_1.line.end_position = {0, shieldman_scale.y * 0.2f};
+    triangle_line_1.visual_start_width = 1.5f;
+    triangle_line_1.visual_end_width = 3.0f;
+    
+    line_entity triangle_line_2 = {};
+    triangle_line_2.line = {};
+    triangle_line_2.line.start_position = {shieldman_scale.x * 0.5f, 0};
+    triangle_line_2.line.end_position = {0, shieldman_scale.y * 0.2f};
+    triangle_line_2.visual_start_width = 1.5f;
+    triangle_line_2.visual_end_width = 3.0f;
+    
+    line_entity triangle_line_3 = {};
+    triangle_line_3.line = {};
+    triangle_line_3.line.start_position = {-shieldman_scale.x * 0.5f, 0};
+    triangle_line_3.line.end_position = {0, -shieldman_scale.y * 0.2f};
+    triangle_line_3.visual_start_width = 1.5f;
+    triangle_line_3.visual_end_width = 3.0f;
+    
+    line_entity triangle_line_4 = {};
+    triangle_line_4.line = {};
+    triangle_line_4.line.start_position = {shieldman_scale.x * 0.5f, 0};
+    triangle_line_4.line.end_position = {0, -shieldman_scale.y * 0.2f};
+    triangle_line_4.visual_start_width = 1.5f;
+    triangle_line_4.visual_end_width = 3.0f;
+    
+    array_add(&shield->lines, &triangle_line_1);
+    array_add(&shield->lines, &triangle_line_2);
+    array_add(&shield->lines, &triangle_line_3);
+    array_add(&shield->lines, &triangle_line_4);
+}
+
 void add_shield_enemy(Game *game, Vector2 position){
     loop_world_position(game, &position);
     game->enemies_count++;
@@ -1516,11 +1560,79 @@ void add_shield_enemy(Game *game, Vector2 position){
     shieldman.enemy = {};
     shieldman.enemy.hp = 22;
     shieldman.enemy.entity.position = position;
-    shieldman.enemy.entity.scale = {55, 24};
+    shieldman.enemy.entity.scale = {56, 12};
     
     f32 horizontal_direction = rnd() % 256 <= 128 ? -1 : 1;
     f32 vertical_direction = rnd() % 256 <= 128 ? -0.1f : 0.1f;
     shieldman.direction = {horizontal_direction, vertical_direction};
+    
+    shieldman.enemy.lines = array_init(sizeof(line_entity), 100);
+    
+    line_entity triangle_line_1 = {};
+    triangle_line_1.line = {};
+    triangle_line_1.line.start_position = {-28, 0};
+    triangle_line_1.line.end_position = {0, 6};
+    triangle_line_1.visual_start_width = 3.0f;
+    triangle_line_1.visual_end_width = 1.0f;
+    
+    line_entity triangle_line_2 = {};
+    triangle_line_2.line = {};
+    triangle_line_2.line.start_position = {-28, 0};
+    triangle_line_2.line.end_position = {0, -6};
+    triangle_line_2.visual_start_width = 3.0f;
+    triangle_line_2.visual_end_width = 1.0f;
+    
+    line_entity triangle_line_3 = {};
+    triangle_line_3.line = {};
+    triangle_line_3.line.start_position = {28, 0};
+    triangle_line_3.line.end_position = {0, 6};
+    triangle_line_3.visual_start_width = 3.0f;
+    triangle_line_3.visual_end_width = 1.0f;
+    
+    line_entity triangle_line_4 = {};
+    triangle_line_4.line = {};
+    triangle_line_4.line.start_position = {28, 0};
+    triangle_line_4.line.end_position = {0, -6};
+    triangle_line_4.visual_start_width = 3.0f;
+    triangle_line_4.visual_end_width = 1.0f;
+    
+    line_entity triangle_line_5 = {};
+    triangle_line_5.line = {};
+    triangle_line_5.line.start_position = {-28, 0};
+    triangle_line_5.line.end_position = {0, 0};
+    triangle_line_5.visual_start_width = 3.0f;
+    triangle_line_5.visual_end_width = 1.5f;
+
+    line_entity triangle_line_6 = {};
+    triangle_line_6.line = {};
+    triangle_line_6.line.start_position = {28, 0};
+    triangle_line_6.line.end_position = {0, 0};
+    triangle_line_6.visual_start_width = 3.0f;
+    triangle_line_6.visual_end_width = 1.5f;
+
+    line_entity triangle_line_7 = {};
+    triangle_line_7.line = {};
+    triangle_line_7.line.start_position = {0, 6};
+    triangle_line_7.line.end_position = {0, 0};
+    triangle_line_7.visual_start_width = 2.0f;
+    triangle_line_7.visual_end_width = 1.0f;
+
+    line_entity triangle_line_8 = {};
+    triangle_line_8.line = {};
+    triangle_line_8.line.start_position = {0, -6};
+    triangle_line_8.line.end_position = {0, 0};
+    triangle_line_8.visual_start_width = 2.0f;
+    triangle_line_8.visual_end_width = 1.0f;
+
+    array_add(&shieldman.enemy.lines, &triangle_line_1);
+    array_add(&shieldman.enemy.lines, &triangle_line_2);
+    array_add(&shieldman.enemy.lines, &triangle_line_3);
+    array_add(&shieldman.enemy.lines, &triangle_line_4);
+    array_add(&shieldman.enemy.lines, &triangle_line_5);
+    array_add(&shieldman.enemy.lines, &triangle_line_6);
+    array_add(&shieldman.enemy.lines, &triangle_line_7);
+    array_add(&shieldman.enemy.lines, &triangle_line_8);
+
     
     shieldman.shields = array_init(sizeof(Enemy), 4);
     
@@ -1530,11 +1642,15 @@ void add_shield_enemy(Game *game, Vector2 position){
     bottom_shield.entity.position = add(shieldman.enemy.entity.position, {0, -shieldman.enemy.entity.scale.y});
     bottom_shield.entity.scale = {shieldman.enemy.entity.scale.x * 0.9f, 4};
     
+    draw_shield(game, &bottom_shield, shieldman.enemy.entity.scale);
+    
     Enemy up_shield = {};
     up_shield.hp = 52;
     up_shield.stopping_shoot = 1;
     up_shield.entity.position = add(shieldman.enemy.entity.position, {0, shieldman.enemy.entity.scale.y});
     up_shield.entity.scale = {shieldman.enemy.entity.scale.x * 0.9f, 4};
+    
+    draw_shield(game, &up_shield, shieldman.enemy.entity.scale);
     
     array_add(&shieldman.shields, &bottom_shield);
     array_add(&shieldman.shields, &up_shield);
@@ -2188,18 +2304,17 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         shield_enemy *shieldman = (shield_enemy *)array_get(&game->shield_enemies, i);
 
         //hit box
-        draw_rect(Buffer, shieldman->enemy.entity.position, shieldman->enemy.entity.scale, 0xaa3344);
+        //draw_rect(Buffer, shieldman->enemy.entity.position, shieldman->enemy.entity.scale, 0xaa3344);
+        draw_enemy(game, Buffer, &shieldman->enemy);
         
         for (int j = 0; j < shieldman->shields.count; j++){
             Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
             
-            draw_rect(Buffer, shield->entity.position, shield->entity.scale, 0x3333aa);
+//            draw_rect(Buffer, shield->entity.position, shield->entity.scale, 0x3333aa);
+            draw_enemy(game, Buffer, shield, 0x000042);
         }
         
-        //draw_enemy(game, Buffer, &blocker->enemy);
     }
-    
-    
     
     //draw fly enemy projectiles
     for  (int i = 0; i < game->fly_enemy_projectiles.count; i++){ 
@@ -2210,7 +2325,7 @@ void draw_entities(Game *game, screen_buffer *Buffer){
 
 }
 
-void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
+void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy, u32 base_color){
     b32 offsetting_on_death = 0;
     if ((game->dead_man || enemy->hp <= 0) && !enemy->render_dead){
         enemy->render_dead = 1;
@@ -2245,7 +2360,7 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
         if (enemy->hit_immune_countdown > 0){
             draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, 0xf0f0f0);
         } else if (!game->dead_man && enemy->hp > 0){
-            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(0x010101, 0xff1111, enemy->in_blood_progress));
+            draw_line(Buffer, start_position, end_position, line.visual_start_width, line.visual_end_width, lerp_color(base_color, 0xff1111, enemy->in_blood_progress));
         } else{
             draw_line_gradient(game, Buffer, start_position, end_position, line_arr->visual_start_width, line_arr->visual_end_width, game->darker_background_gradient);
         }

@@ -394,7 +394,7 @@ void debug_update(Game *game);
 
 void render(Game *game, screen_buffer *Buffer);
 void draw_entities(Game *game, screen_buffer *Buffer);
-void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy);
+void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy, u32 base_color = 0x010101);
 void draw_win_sign(Game *game, screen_buffer *Buffer);
 
 void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier);
