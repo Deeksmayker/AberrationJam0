@@ -198,6 +198,8 @@ struct Enemy{
     b32 died;
     f32 hit_immune_countdown;
     
+    b32 stopping_shoot = 0;
+    
     f32 time_in_blood;
     f32 max_time_in_blood = 20;
     f32 in_blood_progress;
@@ -249,6 +251,11 @@ struct blocker_enemy{
     Enemy enemy;  
 };
 
+struct shield_enemy{
+    Enemy enemy;
+    Array shields;
+};
+
 struct line_hits{
     int enter_count;  
     int exit_count;
@@ -258,6 +265,9 @@ struct line_hits{
     //1 - tile, 2 - enemy
     i32 *hit_types;
     Enemy **enemy_hits;
+    
+    b32 stopped = 0;
+    Vector2 stop_position;
 };
 
 struct collision{
@@ -289,8 +299,9 @@ struct Game{
     Array particles;
     Array line_entities;
     Array fly_enemies;
-    Array blocker_enemies;
     Array fly_enemy_projectiles;
+    Array blocker_enemies;
+    Array shield_enemies;
     Player player;
     Tilemap tilemap;
     
@@ -305,7 +316,7 @@ struct Game{
     
     b32 im_dying_man = 0;
     b32 dead_man = 0;
-    b32 we_got_a_winner = 1;
+    b32 we_got_a_winner = 0;
     
     f32 time_since_win = 0;
     
@@ -350,6 +361,7 @@ void update_enemies_spawn(Game *game);
 void check_player_in_enemy(Game *game, Enemy enemy, Vector2 direction_to_player);
 void update_fly_enemies(Game *game);
 void update_blocker_enemies(Game *game);
+void update_shield_enemies(Game *game);
 void update_fly_enemy_projectiles(Game *game);
 void spawn_fly_enemy_projectile(Game *game, Vector2 direction, Vector2 start_position);
 void update_particles(Game *game);
@@ -371,6 +383,7 @@ void update_camera_shake(Game *game);
 
 void add_fly_enemy(Game *game, Vector2 position);
 void add_blocker_enemy(Game *game, Vector2 position);
+void add_shield_enemy(Game *game, Vector2 position);
 
 void debug_update(Game *game);
 

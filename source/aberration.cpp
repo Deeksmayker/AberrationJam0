@@ -349,6 +349,8 @@ void InitGame(){
     
     global_game.blocker_enemies = array_init(sizeof(blocker_enemy), 100000);
     
+    global_game.shield_enemies = array_init(sizeof(shield_enemy), 100000);
+    
     //add_fly_enemy(&global_game, {30, 35});
     //add_blocker_enemy(&global_game, {30, 35});
     
@@ -587,18 +589,23 @@ void InitGame(){
 
 void Start(){
     //add_blocker_enemy(&global_game, {30, 45});
+    add_shield_enemy(&global_game, {30, 45});
     
     //play_sound("lightHit", SOUND_OPTION_LOOP);
 
 }
 
 void ReloadGame(){
+    stop_sounds();
+    current_spawn_index = 0;
+
     array_free(&global_game.entities);
     array_free(&global_game.particles);
     array_free(&global_game.line_entities);
     array_free(&global_game.fly_enemies);
     array_free(&global_game.fly_enemy_projectiles);
     array_free(&global_game.blocker_enemies);
+    array_free(&global_game.shield_enemies);
     
     for (int i = 0; i < global_game.world_size.y * unit_size; i++){
         free(splash_buffer[i]);
@@ -733,6 +740,7 @@ void update(Game *game){
     update_fly_enemies(game);
     update_fly_enemy_projectiles(game);
     update_blocker_enemies(game);
+    update_shield_enemies(game);
     update_particles(game);
     update_camera_shake(game);
     //debug_update(game);
@@ -995,10 +1003,15 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
     visual_line.color = perfect_shoot ? 0xbf212f : 0xf9a73e;
     visual_line.max_lifetime = perfect_shoot ? 0.4f : 0.2f;
     
-    array_add(&game->line_entities, &visual_line);
-    
     //@TODO: Free this hits
     line_hits hits = check_line_collision(game, line, perfect_shoot);
+    
+    if (hits.stopped){
+        visual_line.line.end_position = hits.stop_position;
+    }
+    
+    array_add(&game->line_entities, &visual_line);
+    
     int collision_count = hits.enter_count >= hits.exit_count ? hits.enter_count : hits.exit_count;
     
     for (int i = 0; i < collision_count; i++){
@@ -1040,6 +1053,25 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
             }
         }
     }
+}
+
+void update_shield_enemies(Game *game){
+    for (int i = 0; i < game->shield_enemies.count; i++){
+        shield_enemy *shieldman = (shield_enemy *)array_get(&game->shield_enemies, i);
+                
+        if (shieldman->enemy.hit_immune_countdown > 0){
+            shieldman->enemy.hit_immune_countdown -= game->delta;
+        }
+        
+        for (int j = 0; j < shieldman->shields.count; j++){
+            Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
+            
+            if (shield->hit_immune_countdown > 0){
+                shield->hit_immune_countdown -= game->delta;
+            }
+        }
+    }
+
 }
 
 void update_blocker_enemies(Game *game){
@@ -1406,6 +1438,29 @@ void add_fly_enemy(Game *game, Vector2 position){
     array_add(&global_game.fly_enemies, &fly);
 }
 
+void add_shield_enemy(Game *game, Vector2 position){
+    loop_world_position(game, &position);
+    game->enemies_count++;
+    
+    shield_enemy shieldman = {};
+    shieldman.enemy = {};
+    shieldman.enemy.hp = 22;
+    shieldman.enemy.entity.position = position;
+    shieldman.enemy.entity.scale = {55, 24};
+    
+    shieldman.shields = array_init(sizeof(Enemy), 4);
+    
+    Enemy bottom_shield = {};
+    bottom_shield.hp = 52;
+    bottom_shield.stopping_shoot = 1;
+    bottom_shield.entity.position = add(shieldman.enemy.entity.position, {0, -shieldman.enemy.entity.scale.y});
+    bottom_shield.entity.scale = {shieldman.enemy.entity.scale.x * 0.9f, 4};
+    
+    array_add(&shieldman.shields, &bottom_shield);
+    
+    array_add(&global_game.shield_enemies, &shieldman);
+}
+
 void add_blocker_enemy(Game *game, Vector2 position){
     loop_world_position(game, &position);
     
@@ -1686,7 +1741,22 @@ Enemy *check_enemy_collision(Game *game, Entity entity){
             return &blocker->enemy;
         }
     }
-
+    
+    for (int i = 0; i < game->shield_enemies.count; i++){
+        shield_enemy *shieldman = (shield_enemy *)array_get(&game->shield_enemies, i);
+        
+        if (check_box_collision(&entity, &shieldman->enemy.entity)){
+            return &shieldman->enemy;
+        }
+        
+        for (int j = 0; j < shieldman->shields.count; j++){
+            Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
+            
+            if (check_box_collision(&entity, &shield->entity)){
+                return shield;
+            }
+        }
+    }
     
     return 0;
 }
@@ -1795,11 +1865,13 @@ line_hits check_line_collision(Game *game, Line line, b32 perfect){
                 enemy_collision->hp -= perfect ? game->player.pefrect_damage : game->player.damage;
                 hitstop_countdown += 0.1f;
                 shake_camera(game, 0.1f);
-                /*
-                if (!game->playing_ambient){
-                    play_sound("audio/lightHit.wav");
+                
+                if (enemy_collision->stopping_shoot){
+                    hits.stopped = 1;
+                    hits.stop_position = {point_x, point_y};
+                    points_count = i;
+                    break;
                 }
-                */
             }
         }
                         
@@ -2030,6 +2102,23 @@ void draw_entities(Game *game, screen_buffer *Buffer){
         
         draw_enemy(game, Buffer, &blocker->enemy);
     }
+    
+    for  (int i = 0; i < game->shield_enemies.count; i++){ 
+        shield_enemy *shieldman = (shield_enemy *)array_get(&game->shield_enemies, i);
+
+        //hit box
+        draw_rect(Buffer, shieldman->enemy.entity.position, shieldman->enemy.entity.scale, 0xaa3344);
+        
+        for (int j = 0; j < shieldman->shields.count; j++){
+            Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
+            
+            draw_rect(Buffer, shield->entity.position, shield->entity.scale, 0x3333aa);
+        }
+        
+        //draw_enemy(game, Buffer, &blocker->enemy);
+    }
+    
+    
     
     //draw fly enemy projectiles
     for  (int i = 0; i < game->fly_enemy_projectiles.count; i++){ 
