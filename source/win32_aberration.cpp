@@ -347,7 +347,8 @@ int CALLBACK WinMain(HINSTANCE Instance,
     WindowClass.style       = CS_HREDRAW | CS_VREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     WindowClass.hInstance   = Instance;
-    
+    WindowClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);  
+    WindowClass.hCursor = LoadCursor(Instance, MAKEINTRESOURCE(230));    
     WindowClass.lpszClassName = "ClassTrulyAberration";
     
 #if defined DEBUG || defined PRINT_FPS

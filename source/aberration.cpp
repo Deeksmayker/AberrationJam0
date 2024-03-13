@@ -404,7 +404,7 @@ void InitGame(){
     wall_hit_emitter->shape            = (particle_shape)0;
     wall_hit_emitter->try_splash       = 0;
     wall_hit_emitter->splash_chance    = 0;
-    wall_hit_emitter->colliding_chance = 1;
+    wall_hit_emitter->colliding_chance = 0.1f;
     wall_hit_emitter->per_second       = 1;
     
     particle_emitter *pole_ride_emitter = &global_game.player.pole_ride_emitter;
@@ -438,19 +438,19 @@ void InitGame(){
     
     particle_emitter *cleaning_emitter = &global_game.player.cleaning_emitter;
     *cleaning_emitter = {};
-    cleaning_emitter->count_min        = 60;
+    cleaning_emitter->count_min        = 80;
     cleaning_emitter->count_max        = 100;
     cleaning_emitter->speed_min        = 60;
     cleaning_emitter->speed_max        = 150;
     cleaning_emitter->scale_min        = 1.0f;
-    cleaning_emitter->scale_max        = 4.0f;
-    cleaning_emitter->lifetime_min     = 1.0f;
-    cleaning_emitter->lifetime_max     = 2.0f;
+    cleaning_emitter->scale_max        = 6.0f;
+    cleaning_emitter->lifetime_min     = 2.0f;
+    cleaning_emitter->lifetime_max     = 5.0f;
     cleaning_emitter->color            = 0xffffff;
     cleaning_emitter->spread           = 0.9f;
     cleaning_emitter->shape            = (particle_shape)0;
     cleaning_emitter->try_splash       = 1;
-    cleaning_emitter->splash_chance    = 0.8f;
+    cleaning_emitter->splash_chance    = 0.9f;
     cleaning_emitter->colliding_chance = 0.35f;
     cleaning_emitter->per_second       = 10;
     
@@ -589,7 +589,7 @@ void InitGame(){
 
 void Start(){
     //add_blocker_enemy(&global_game, {30, 45});
-    add_shield_enemy(&global_game, {30, 45});
+    //add_shield_enemy(&global_game, {30, 45});
     
     //play_sound("lightHit", SOUND_OPTION_LOOP);
 
@@ -763,10 +763,10 @@ void update(Game *game){
 }
 
 Vector2 get_random_offscreen_position(Game *game){
-    b32 spawn_up = rnd() % 256 < 128;
+    f32 vertical_multiplier = rnd() % 256 < 128 ? -1 : 1;
     f32 x_position = rnd(0.0f, game->world_size.x);
     f32 y_position = get_camera_position().y + rnd(game->camera_screen_world_size.y * 1.2f,
-                                                   game->camera_screen_world_size.y * 1.7f);
+                                                   game->camera_screen_world_size.y * 2.2f) * vertical_multiplier;
     Vector2 position = {x_position, y_position};
     
     return position;
@@ -790,6 +790,9 @@ void update_enemies_spawn(Game *game){
         }
         for (int i = 0; i < spawns[current_spawn_index].blocker_enemies_count; i++){
             add_blocker_enemy(game, get_random_offscreen_position(game));
+        }
+        for (int i = 0; i < spawns[current_spawn_index].shield_enemies_count; i++){
+            add_shield_enemy(game, get_random_offscreen_position(game));
         }
         current_spawn_index++;
     }
@@ -1361,7 +1364,7 @@ void check_player_in_enemy(Game *game, Enemy enemy, Vector2 direction_to_player)
         game->current_color_palette = 0xFF8F8F;
         
         hitstop_countdown += 0.2f;
-        clamp(&hitstop_countdown, 0, 1);
+        clamp(&hitstop_countdown, 0, 0.4f);
         
         game->player.damage_immune_countdown = 0.05f; 
     }
@@ -1399,6 +1402,7 @@ void update_fly_enemy_projectiles(Game *game){
             game->current_color_palette = 0xFF8F8F;
 
             hitstop_countdown += 0.2f;
+            clamp(&hitstop_countdown, 0, 0.4f);
             
             array_remove(&game->fly_enemy_projectiles, i);
             return;
@@ -1812,7 +1816,7 @@ void calculate_player_tilemap_collisions(Game *game, collision *collisions_data)
                     player->velocity.y += 100 * game->delta;
                     player->velocity.x *= 1.0f - game->delta * 3;
                     player->riding_pole = 1;
-                    shake_camera(game, game->delta * 0.3f);
+                    //shake_camera(game, game->delta * 0.3f);
                     
                     update_overtime_emitter(game, &player->pole_ride_emitter, {0, -1}, collisions_data[i].obstacle_position, 1, 1);
                 }
@@ -2061,6 +2065,7 @@ line_hits check_line_collision(Game *game, Line line, b32 perfect){
                 enemy_collision->hit_immune_countdown = 0.07f;
                 enemy_collision->hp -= perfect ? game->player.pefrect_damage : game->player.damage;
                 hitstop_countdown += 0.1f;
+                clamp(&hitstop_countdown, 0, 0.1f);
                 shake_camera(game, 0.1f);
                 
                 if (enemy_collision->stopping_shoot){
@@ -2485,8 +2490,8 @@ void update_camera_shake(Game *game){
     Vector2 previous_shake_position = game->shake_last_additional_position;
     
     game->shake_last_additional_position = {
-                                 game->shake_max_power.x * ((f32)((rnd(100  * (i32)(game->time * 10))) % 10000)) / 10000,
-                                 game->shake_max_power.y * ((f32)((rnd(1000 * (i32)(game->time * 10))) % 10000)) / 10000};
+                                 game->shake_max_power.x * ((f32)((rnd(100  * (i32)(game->time * 5))) % 10000)) / 10000,
+                                 game->shake_max_power.y * ((f32)((rnd(1000 * (i32)(game->time * 5))) % 10000)) / 10000};
     multiply(&game->shake_last_additional_position, current_shake);
     
     add(&game->shake_additional_position, subtract(game->shake_last_additional_position, previous_shake_position));
