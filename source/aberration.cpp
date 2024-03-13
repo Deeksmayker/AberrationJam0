@@ -716,6 +716,7 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     camera_target_y += additional_vertical_position * 0.3f;
     
     if (global_game.we_got_a_winner || global_game.dead_man){
+        global_game.time_since_win += global_game.delta;
         camera_position.y += global_game.delta * 10;
     } else{
         camera_position.y = lerp(camera_position.y, camera_target_y, global_game.delta * 10);
@@ -743,6 +744,11 @@ void update(Game *game){
     
     loop_world_position(game, &game->player.entity.position);
     
+    if (game->we_got_a_winner && game->time_since_win >= 1 && !game->playing_lune){
+        play_sound("ClairDeLune");
+        game->playing_lune = 1;
+    }
+    
     //camera_position = game->player.entity.position;
 }
 
@@ -760,7 +766,6 @@ void update_enemies_spawn(Game *game){
     if (current_spawn_index >= SPAWN_COUNT && game->enemies_count <= 0 && !game->we_got_a_winner){
         game->we_got_a_winner = 1;
         shake_camera(game, 1.0f);
-        play_sound("ClairDeLune");
         game->color_change_countdown = 0.05f;
         game->current_color_palette = 0xFF8F8F;
     }
@@ -2081,19 +2086,21 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy){
 
 void draw_win_sign(Game *game, screen_buffer *Buffer){
     Vector2 screen_center_world = {game->world_size.x * 0.5f, get_camera_position().y + game->camera_screen_world_size.y* 0.5f};
+    
+    f32 width_progress = clamp01(game->time_since_win / 5.0f);
 
     line_entity line_1 = {};
     line_1.line = {};
     line_1.line.start_position = {screen_center_world.x, screen_center_world.y + 35};
     line_1.line.end_position = {screen_center_world.x, screen_center_world.y - 35};
-    line_1.visual_start_width = 5.0f;
-    line_1.visual_end_width = 3.0f;
+    line_1.visual_start_width = lerp(0.0f, 5.0f, width_progress);
+    line_1.visual_end_width   = lerp(0.0f, 3.0f, width_progress);
     line_entity line_2 = {};
     line_2.line = {};
     line_2.line.start_position = {screen_center_world.x - 20, screen_center_world.y + 10};
     line_2.line.end_position = {screen_center_world.x + 20, screen_center_world.y + 10};
-    line_2.visual_start_width = 3.0f;
-    line_2.visual_end_width = 3.0f;
+    line_2.visual_start_width = lerp(0.0f, 3.0f, width_progress);
+    line_2.visual_end_width   = lerp(0.0f, 3.0f, width_progress);
 
     line_1.line.start_position.x += rnd(-0.5f, 0.5f);
     line_1.line.start_position.y += rnd(-0.5f, 0.5f);

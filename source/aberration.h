@@ -305,7 +305,9 @@ struct Game{
     
     b32 im_dying_man = 0;
     b32 dead_man = 0;
-    b32 we_got_a_winner = 0;
+    b32 we_got_a_winner = 1;
+    
+    f32 time_since_win = 0;
     
     i32 blockers_count;
     i32 enemies_count;
@@ -322,6 +324,7 @@ struct Game{
     Gradient fly_enemies_gradient;
     
     b32 playing_ambient;
+    b32 playing_lune;
 };
 
 global_variable Vector2 camera_position;
