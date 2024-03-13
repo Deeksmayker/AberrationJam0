@@ -253,6 +253,11 @@ struct blocker_enemy{
 
 struct shield_enemy{
     Enemy enemy;
+    
+    Vector2 direction;
+    f32 speed = 20;
+    Vector2 velocity;
+    
     Array shields;
 };
 
@@ -393,7 +398,7 @@ void draw_enemy(Game *game, screen_buffer *Buffer, Enemy *enemy);
 void draw_win_sign(Game *game, screen_buffer *Buffer);
 
 void update_overtime_emitter(Game *game, particle_emitter *emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier);
-void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier);
+void emit_particles(Game *game, particle_emitter emmiter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier = 1);
 void shoot_particle(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 speed_multiplier);
 
 int notes_count = 49;

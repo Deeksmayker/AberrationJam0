@@ -595,9 +595,12 @@ void Start(){
 
 }
 
+global_variable b32 setuped = 0;
+
 void ReloadGame(){
     stop_sounds();
     current_spawn_index = 0;
+    setuped = 0;
 
     array_free(&global_game.entities);
     array_free(&global_game.particles);
@@ -671,7 +674,6 @@ void GameUpdateAndRender(f32 delta, Input input, screen_buffer *Buffer){
     global_game.input = input;
     global_game.time += delta;
     
-    local_persist b32 setuped = 0;
     if (!setuped){
         Start();
     }
@@ -1022,11 +1024,15 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
             hit_emitter = &player->shoot.wall_hit_emitter;
         }
     
+        f32 particles_speed_and_count_multiplier = hits.stopped ? 2.0f : 1.0f;
         if (hits.enter_count > i){
-            emit_particles(game, *hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i], 0.5f);
+            emit_particles(game, *hit_emitter, multiply(player_to_mouse, -1), hits.enter_positions[i],
+                           hits.stopped ? particles_speed_and_count_multiplier : 0.5f,
+                           particles_speed_and_count_multiplier);
         }
         if (hits.exit_count > i){
-            emit_particles(game, *hit_emitter, player_to_mouse, hits.exit_positions[i], 1.0f);
+            emit_particles(game, *hit_emitter, player_to_mouse, hits.exit_positions[i],
+                           particles_speed_and_count_multiplier, particles_speed_and_count_multiplier);
         }
         
         if (hits.enter_count > i && hits.exit_count > i){
@@ -1055,13 +1061,55 @@ void shoot_rifle(Game *game, Player *player, Player::shooter *shoot, Vector2 pla
     }
 }
 
+void kill_all_shields(Game *game, shield_enemy *shieldman){
+    for (int j = 0; j < shieldman->shields.count; j++){
+        Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
+        
+        if (!shield->died){
+            shield->stopping_shoot = 0;
+            shield->died = 1;
+        }
+    }
+}
+
 void update_shield_enemies(Game *game){
     for (int i = 0; i < game->shield_enemies.count; i++){
         shield_enemy *shieldman = (shield_enemy *)array_get(&game->shield_enemies, i);
                 
+        Vector2 vector_to_player = subtract(game->player.entity.position, shieldman->enemy.entity.position);
+                
         if (shieldman->enemy.hit_immune_countdown > 0){
             shieldman->enemy.hit_immune_countdown -= game->delta;
         }
+        
+        if (shieldman->enemy.hp <= 0){
+            if (!shieldman->enemy.died){
+                game->enemies_count--;
+                shieldman->enemy.died = 1;
+                kill_all_shields(game, shieldman);
+            }
+            continue;
+        }
+        
+        if (in_blood(shieldman->enemy.entity)){
+            shieldman->enemy.time_in_blood += game->delta;
+            shieldman->enemy.in_blood_progress = clamp01(shieldman->enemy.time_in_blood / shieldman->enemy.max_time_in_blood);
+        }
+        
+        check_player_in_enemy(game, shieldman->enemy, vector_to_player);
+
+        if (shieldman->enemy.time_in_blood > 0){
+            f32 count_multiplier = lerp(0.0f, 4.0f, shieldman->enemy.in_blood_progress);
+            f32 speed_multiplier = lerp(1.0f, 4.0f, shieldman->enemy.in_blood_progress);
+            update_overtime_emitter(game, &game->blood_emitter, {0, 0.5}, shieldman->enemy.entity.position, count_multiplier, speed_multiplier);
+        }
+        
+        shieldman->speed = lerp(20.0f, 50.0f, shieldman->enemy.in_blood_progress);
+        shieldman->velocity = multiply(shieldman->direction, shieldman->speed);
+
+        add(&shieldman->enemy.entity.position, multiply(shieldman->velocity, game->delta));
+        
+        loop_world_position(game, &shieldman->enemy.entity.position);
         
         for (int j = 0; j < shieldman->shields.count; j++){
             Enemy *shield = (Enemy *)array_get(&shieldman->shields, j);
@@ -1069,6 +1117,28 @@ void update_shield_enemies(Game *game){
             if (shield->hit_immune_countdown > 0){
                 shield->hit_immune_countdown -= game->delta;
             }
+            
+            if (shield->hp <= 0){
+                if (!shield->died){
+                    shield->stopping_shoot = 0;
+                    shield->died = 1;
+                }
+                continue;
+            }
+            
+            Vector2 target_shield_position = shieldman->enemy.entity.position;
+            
+            if (shield->entity.position.y > target_shield_position.y){
+                target_shield_position.y += shieldman->enemy.entity.scale.y;
+            } else{
+                target_shield_position.y -= shieldman->enemy.entity.scale.y;
+            }
+            
+            shield->entity.position = lerp(shield->entity.position, target_shield_position, game->delta * 5);
+            
+            loop_world_position(game, &shield->entity.position);
+            
+            check_player_in_enemy(game, *shield, vector_to_player);
         }
     }
 
@@ -1448,6 +1518,10 @@ void add_shield_enemy(Game *game, Vector2 position){
     shieldman.enemy.entity.position = position;
     shieldman.enemy.entity.scale = {55, 24};
     
+    f32 horizontal_direction = rnd() % 256 <= 128 ? -1 : 1;
+    f32 vertical_direction = rnd() % 256 <= 128 ? -0.1f : 0.1f;
+    shieldman.direction = {horizontal_direction, vertical_direction};
+    
     shieldman.shields = array_init(sizeof(Enemy), 4);
     
     Enemy bottom_shield = {};
@@ -1456,7 +1530,14 @@ void add_shield_enemy(Game *game, Vector2 position){
     bottom_shield.entity.position = add(shieldman.enemy.entity.position, {0, -shieldman.enemy.entity.scale.y});
     bottom_shield.entity.scale = {shieldman.enemy.entity.scale.x * 0.9f, 4};
     
+    Enemy up_shield = {};
+    up_shield.hp = 52;
+    up_shield.stopping_shoot = 1;
+    up_shield.entity.position = add(shieldman.enemy.entity.position, {0, shieldman.enemy.entity.scale.y});
+    up_shield.entity.scale = {shieldman.enemy.entity.scale.x * 0.9f, 4};
+    
     array_add(&shieldman.shields, &bottom_shield);
+    array_add(&shieldman.shields, &up_shield);
     
     array_add(&global_game.shield_enemies, &shieldman);
 }
@@ -2205,14 +2286,14 @@ void draw_win_sign(Game *game, screen_buffer *Buffer){
     draw_line_gradient(game, Buffer, line_2.line.start_position, line_2.line.end_position, line_2.visual_start_width, line_2.visual_end_width, game->lighter_background_gradient);
 }
 
-void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier){
+void emit_particles(Game *game, particle_emitter emitter, Vector2 direction, Vector2 start_position, f32 count_multiplier, f32 speed_multiplier){
     normalize(&direction);
     rnd_state++;
     int count = rnd((int)emitter.count_min, (int)emitter.count_max);
     count *= count_multiplier; 
     
     for (int i = 0; i < count; i++){
-        shoot_particle(game, emitter, direction, start_position, 1);
+        shoot_particle(game, emitter, direction, start_position, speed_multiplier);
     }
 }
 
